@@ -33,6 +33,13 @@
    +    run "./build.sh -r no -t nonrt-000"
    ```
 
+   - 約第 336 行 (選用但建議：增加對未來 DKMS build 的支持):
+
+   ```diff
+   echo "$kernel_entry"
+   +  run "install -D -m 644 ${current_workspace}/linux-kernel-overlay/kernel.config /lib/modules/${kernel_entry}/build/.config"
+   ```
+
 5. 執行安裝指令（3.2.2 節）：
 
    ```bash
