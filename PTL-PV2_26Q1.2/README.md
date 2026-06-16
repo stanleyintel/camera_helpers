@@ -68,9 +68,10 @@ The "Custom HID" is INTC031M.
 
    ```bash
    git clone https://github.com/stanleyintel/camera_helpers
+   cd camera_helpers/26Q1.2/ipu7
    ```
 
-2. Run scripts `1_do_clone_sources.sh` through `7_do_post_install.sh` one by one.  
+2. Run scripts `1_do_clone_sources.sh` through `7_do_post_install.sh` one by one under current directory. 
    The board reboots automatically at the end of `7_do_post_install.sh`.
 3. For script execution details, see:  
    https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/tree/release/26Q1.2

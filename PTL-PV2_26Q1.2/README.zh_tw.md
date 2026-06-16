@@ -68,6 +68,7 @@ The "Custom HID" is INTC031M.
 
    ```bash
    git clone https://github.com/stanleyintel/camera_helpers
+   cd camera_helpers/26Q1.2/ipu7
    ```
 
 2. 依序執行 `1_do_clone_sources.sh` 到 `7_do_post_install.sh`。  
