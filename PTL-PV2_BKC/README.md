@@ -1,4 +1,4 @@
-# PTL-PV2 26Q1.2 Setup Guide
+# PTL-PV2 BKC Setup Guide
 
 [繁體中文 (Traditional Chinese)](./README.zh_tw.md)
 

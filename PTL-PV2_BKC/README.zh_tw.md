@@ -1,4 +1,4 @@
-# PTL-PV2 26Q1.2 安裝指南
+# PTL-PV2 BKC 安裝指南
 
 [English](./README.md)
 
