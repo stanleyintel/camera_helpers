@@ -33,6 +33,13 @@ Reference: **RDC 858119 PTL GSG**, Chapter 3.
    +    run "./build.sh -r no -t nonrt-000"
    ```
 
+   - Around line 2336 (optional but recommended: add config for future dkms build):
+
+   ```diff
+   echo "$kernel_entry"
+   +  run "install -D -m 644 ${current_workspace}/linux-kernel-overlay/kernel.config /lib/modules/${kernel_entry}/build/.config"
+   ```
+
 5. Run the installer command (section 3.2.2):
 
    ```bash
