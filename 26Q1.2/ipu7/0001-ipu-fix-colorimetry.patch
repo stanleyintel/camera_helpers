@@ -1,0 +1,70 @@
+Submodule ipu6-drivers contains modified content
+diff --git a/ipu6-drivers/drivers/media/pci/intel/ipu6/ipu6-isys-video.c b/ipu6-drivers/drivers/media/pci/intel/ipu6/ipu6-isys-video.c
+index 927d92ea9..e9c9df233 100644
+--- a/ipu6-drivers/drivers/media/pci/intel/ipu6/ipu6-isys-video.c
++++ b/ipu6-drivers/drivers/media/pci/intel/ipu6/ipu6-isys-video.c
+@@ -280,6 +280,20 @@ static void ipu6_isys_try_fmt_cap(struct ipu6_isys_video *av, u32 type,
+ 		    av->isys->pdata->ipdata->isys_dma_overshoot);
+ }
+ 
++static u32 ipu6_isys_colorspace(u32 pixelformat)
++{
++	switch (pixelformat) {
++	case V4L2_PIX_FMT_UYVY:
++	case V4L2_PIX_FMT_YUYV:
++		return V4L2_COLORSPACE_REC709;
++	case V4L2_PIX_FMT_RGB565:
++	case V4L2_PIX_FMT_BGR24:
++		return V4L2_COLORSPACE_SRGB;
++	default:
++		return V4L2_COLORSPACE_RAW;
++	}
++}
++
+ static void __ipu6_isys_vidioc_try_fmt_vid_cap(struct ipu6_isys_video *av,
+ 					       struct v4l2_format *f)
+ {
+@@ -288,7 +302,7 @@ static void __ipu6_isys_vidioc_try_fmt_vid_cap(struct ipu6_isys_video *av,
+ 			      &f->fmt.pix.bytesperline, &f->fmt.pix.sizeimage);
+ 
+ 	f->fmt.pix.field = V4L2_FIELD_NONE;
+-	f->fmt.pix.colorspace = V4L2_COLORSPACE_RAW;
++	f->fmt.pix.colorspace = ipu6_isys_colorspace(f->fmt.pix.pixelformat);
+ 	f->fmt.pix.ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
+ 	f->fmt.pix.quantization = V4L2_QUANTIZATION_DEFAULT;
+ 	f->fmt.pix.xfer_func = V4L2_XFER_FUNC_DEFAULT;
+Submodule ipu7-drivers contains modified content
+diff --git a/ipu7-drivers/drivers/media/pci/intel/ipu7/ipu7-isys-video.c b/ipu7-drivers/drivers/media/pci/intel/ipu7/ipu7-isys-video.c
+index f69e7a6..27c2b4d 100644
+--- a/ipu7-drivers/drivers/media/pci/intel/ipu7/ipu7-isys-video.c
++++ b/ipu7-drivers/drivers/media/pci/intel/ipu7/ipu7-isys-video.c
+@@ -249,6 +249,20 @@ static void ipu7_isys_try_fmt_cap(struct ipu7_isys_video *av, u32 type,
+ 		    av->isys->pdata->ipdata->isys_dma_overshoot);
+ }
+ 
++static u32 ipu_isys_colorspace(u32 pixelformat)
++{
++  switch (pixelformat) {
++  case V4L2_PIX_FMT_UYVY:
++  case V4L2_PIX_FMT_YUYV:
++    return V4L2_COLORSPACE_REC709;
++  case V4L2_PIX_FMT_RGB565:
++  case V4L2_PIX_FMT_BGR24:
++    return V4L2_COLORSPACE_SRGB;
++  default:
++    return V4L2_COLORSPACE_RAW;
++  }
++}
++
+ static void __ipu_isys_vidioc_try_fmt_vid_cap(struct ipu7_isys_video *av,
+ 					      struct v4l2_format *f)
+ {
+@@ -257,7 +271,7 @@ static void __ipu_isys_vidioc_try_fmt_vid_cap(struct ipu7_isys_video *av,
+ 			      &f->fmt.pix.bytesperline, &f->fmt.pix.sizeimage);
+ 
+ 	f->fmt.pix.field = V4L2_FIELD_NONE;
+-	f->fmt.pix.colorspace = V4L2_COLORSPACE_RAW;
++	f->fmt.pix.colorspace = ipu_isys_colorspace(f->fmt.pix.pixelformat);
+ 	f->fmt.pix.ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
+ 	f->fmt.pix.quantization = V4L2_QUANTIZATION_DEFAULT;
+ 	f->fmt.pix.xfer_func = V4L2_XFER_FUNC_DEFAULT;
