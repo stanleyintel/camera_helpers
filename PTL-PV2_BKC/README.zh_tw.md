@@ -39,7 +39,7 @@
    sudo -E ./installer.sh UBUNTU_NOBLE PTL lts-v6.18.23-deb-overlay-260427T075939Z default
    ```
 
-   請仔細檢查執行日誌。腳本會在完成後重新開機，並自動選擇：
+   請仔細檢查執行日誌。腳本會在完成後自動重新開機，並選擇：
    `Ubuntu, with Linux 6.18.23-nonrt-00`。
 
 6. 重新開機後，確認 kernel 版本：
@@ -79,7 +79,7 @@ https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/blob/release/26Q
    sudo dpkg -i --force-overwrite libcamhal_*.deb
    ```
 
-3. 在目前資料夾執行 [`7_do_post_install.sh`](./7_do_post_install.sh)。  
+3. 下載並執行 [`7_do_post_install.sh`](./7_do_post_install.sh)。  
    此腳本會先加入非 root 使用者權限，再自動重新開機平台。
 
 ## 4. 測試 D3 ISX031
