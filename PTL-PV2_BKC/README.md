@@ -79,7 +79,7 @@ Set **Custom HID** to `INTC031M`.
    sudo dpkg -i --force-overwrite libcamhal_*.deb
    ```
 
-3. Download `7_do_post_install.sh` to the current folder and run it.  
+3. Download and run [`7_do_post_install.sh`](./7_do_post_install.sh).  
    The script adds permissions for non-root users and then reboots the platform automatically.
 
 ## 4. Test D3 ISX031

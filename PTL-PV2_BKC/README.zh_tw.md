@@ -79,7 +79,7 @@ https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/blob/release/26Q
    sudo dpkg -i --force-overwrite libcamhal_*.deb
    ```
 
-3. 將 `7_do_post_install.sh` 下載到目前資料夾後執行。  
+3. 在目前資料夾執行 [`7_do_post_install.sh`](./7_do_post_install.sh)。  
    此腳本會先加入非 root 使用者權限，再自動重新開機平台。
 
 ## 4. 測試 D3 ISX031
