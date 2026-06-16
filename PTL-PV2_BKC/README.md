@@ -33,7 +33,7 @@ Reference: **RDC 858119 PTL GSG**, Chapter 3.
    +    run "./build.sh -r no -t nonrt-000"
    ```
 
-   - Around line 2336 (optional but recommended: add config for future dkms build):
+   - Around line 336 (optional but recommended: add config for future dkms build):
 
    ```diff
    echo "$kernel_entry"
