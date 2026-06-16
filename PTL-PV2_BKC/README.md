@@ -4,18 +4,18 @@
 
 ## Table of Contents
 
-- [1. Install BKC Kernel](#1-install-bkc-kernel)
-- [2. BIOS Configuration for D3 ISX031](#2-bios-configuration-for-d3-isx031)
-- [3. Install Intel-MIPI-CSI-Camera-Reference-Driver (release/26Q1.2)](#3-install-intel-mipi-csi-camera-reference-driver-release26q12)
-- [4. Test with D3 ISX031](#4-test-with-d3-isx031)
+- [1. Install the BKC Kernel](#1-install-the-bkc-kernel)
+- [2. Configure BIOS for D3 ISX031](#2-configure-bios-for-d3-isx031)
+- [3. Install PTL PV2 Required Packages](#3-install-ptl-pv2-required-packages)
+- [4. Test D3 ISX031](#4-test-d3-isx031)
 
-## 1. Install BKC Kernel
+## 1. Install the BKC Kernel
 
-Reference: **RDC 858119 PTL GSG**, focus on Chapter 3.
+Reference: **RDC 858119 PTL GSG**, Chapter 3.
 
-1. Install Ubuntu 24.04 LTS as described in section 3.1.
-2. Download and decompress `installer.zip` (Ubuntu Kernel Overlay Auto Installer Script) from **RDC 860689** .
-3. Ensure proxy is properly configured in Ubuntu; otherwise, later steps may fail.
+1. Install Ubuntu 24.04 LTS (section 3.1).
+2. Download and extract `installer.zip` (Ubuntu Kernel Overlay Auto Installer Script) from **RDC 860689**.
+3. Confirm Ubuntu proxy settings are correct. Otherwise, later steps may fail.
 4. Modify `installer.sh`:
 
    - Around line 174:
@@ -39,10 +39,10 @@ Reference: **RDC 858119 PTL GSG**, focus on Chapter 3.
    sudo -E ./installer.sh UBUNTU_NOBLE PTL lts-v6.18.23-deb-overlay-260427T075939Z default
    ```
 
-   Check execution logs carefully. The script reboots the board and auto-selects:
+   Review the logs carefully. The script reboots the board and automatically selects:
    `Ubuntu, with Linux 6.18.23-nonrt-00`.
 
-6. After reboot, confirm kernel version:
+6. After reboot, confirm the kernel version:
 
    ```bash
    uname -r
@@ -54,29 +54,44 @@ Reference: **RDC 858119 PTL GSG**, focus on Chapter 3.
    6.18.23-nonrt-000
    ```
 
-7. For details about what `installer.zip` executes and installs, refer to PTL GSG.
+7. For full details of what `installer.zip` installs and executes, refer to PTL GSG.
 
-## 2. BIOS Configuration for D3 ISX031
+## 2. Configure BIOS for D3 ISX031
 
-Configure BIOS with the settings shown in **MIPI Camera Configuration for IPU75XA**:  
+Configure BIOS according to **MIPI Camera Configuration for IPU75XA**:  
 https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/blob/release/26Q1.2/doc/isx031/userspace-gmsl.md#mipi-camera-configuration-for-ipu75xa
-The "Custom HID" is INTC031M.
 
-## 3. Install Intel-MIPI-CSI-Camera-Reference-Driver (release/26Q1.2)
+Set **Custom HID** to `INTC031M`.
 
-1. Clone:
+## 3. Install PTL PV2 Required Packages
+
+1. Download and extract `Panther Lake - H HDMI Capture Software Packages for PV2 Release` from **RDC 860689**.
+2. Follow section 4.2 to install IPU components:
 
    ```bash
-   git clone https://github.com/stanleyintel/camera_helpers
-   cd camera_helpers/26Q1.2/ipu7
+   sudo apt install -y alien
+   sudo alien ./*.rpm
+   sudo dpkg -i --force-overwrite icamerasrc_*.deb
+   sudo dpkg -i --force-overwrite ipu7xfw_*.deb
+   sudo dpkg -i --force-overwrite libiaaiq-ipu75xa_*.deb
+   sudo dpkg -i --force-overwrite libiaaiq-ipu7x_*.deb
+   sudo dpkg -i --force-overwrite ipu75xafw_*.deb
+   sudo dpkg -i --force-overwrite libcamhal_*.deb
    ```
 
-2. Run scripts `1_do_clone_sources.sh` through `7_do_post_install.sh` one by one under current directory. 
-   The board reboots automatically at the end of `7_do_post_install.sh`.
-3. For script execution details, see:  
-   https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/tree/release/26Q1.2
+3. Download `7_do_post_install.sh` to the current folder and run it.  
+   The script adds permissions for non-root users and then reboots the platform automatically.
 
-## 4. Test with D3 ISX031
+## 4. Test D3 ISX031
 
-1. Run `8_do_bind_max9x_mono_isx031.sh` to configure links and routes.
-2. Run the remaining validation command(s) as needed for your environment.
+1. DMA mode:
+
+   ```bash
+   gst-launch-1.0 icamerasrc scene-mode=auto device-name=isx031-1 io-mode=dma_mode printfps=true ! 'video/x-raw(memory:DMABuf),drm-format=UYVY,width=1920,height=1536' ! fpsdisplaysink video-sink=glimagesink
+   ```
+
+2. mmap mode:
+
+   ```bash
+   gst-launch-1.0 icamerasrc scene-mode=auto device-name=isx031-1 io-mode=mmap printfps=true ! 'video/x-raw,format=UYVY,width=1920,height=1536' ! fpsdisplaysink video-sink=glimagesink
+   ```
