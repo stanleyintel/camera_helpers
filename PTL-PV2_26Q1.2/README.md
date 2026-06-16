@@ -7,7 +7,7 @@
 - [1. Install BKC Kernel](#1-install-bkc-kernel)
 - [2. BIOS Configuration for D3 ISX031](#2-bios-configuration-for-d3-isx031)
 - [3. Install Intel-MIPI-CSI-Camera-Reference-Driver (release/26Q1.2)](#3-install-intel-mipi-csi-camera-reference-driver-release26q12)
-- [4. Test with ISX031](#4-test-with-d3-isx031)
+- [4. Test with D3 ISX031](#4-test-with-d3-isx031)
 
 ## 1. Install BKC Kernel
 
