@@ -5,9 +5,9 @@
 ## 目錄
 
 - [1. 安裝 BKC Kernel](#1-安裝-bkc-kernel)
-- [2. ISX031 的 BIOS 設定](#2-isx031-的-bios-設定)
+- [2. D3 ISX031 的 BIOS 設定](#2-d3-isx031-的-bios-設定)
 - [3. 安裝 Intel-MIPI-CSI-Camera-Reference-Driver（release/26Q1.2）](#3-安裝-intel-mipi-csi-camera-reference-driverrelease26q12)
-- [4. 使用 ISX031 測試](#4-使用-isx031-測試)
+- [4. 使用 D3 ISX031 測試](#4-使用-d3-isx031-測試)
 
 ## 1. 安裝 BKC Kernel
 
@@ -56,10 +56,11 @@
 
 7. 若要了解 `installer.zip` 實際執行與安裝內容，請參考 PTL GSG。
 
-## 2. ISX031 的 BIOS 設定
+## 2. D3 ISX031 的 BIOS 設定
 
-請閱讀 **MIPI Camera Configuration for IPU75XA**：  
+Configure BIOS with the settings shown in **MIPI Camera Configuration for IPU75XA**：  
 https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/blob/release/26Q1.2/doc/isx031/userspace-gmsl.md#mipi-camera-configuration-for-ipu75xa
+The "Custom HID" is INTC031M.
 
 ## 3. 安裝 Intel-MIPI-CSI-Camera-Reference-Driver（release/26Q1.2）
 
@@ -74,7 +75,7 @@ https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/blob/release/26Q
 3. 腳本執行細節請參考：  
    https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/tree/release/26Q1.2
 
-## 4. 使用 ISX031 測試
+## 4. 使用 D3 ISX031 測試
 
 1. 執行 `8_do_bind_max9x_mono_isx031.sh` 以設定 links 與 routes。
 2. 依你的環境執行後續驗證指令。
