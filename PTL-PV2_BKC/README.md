@@ -14,7 +14,7 @@
 Reference: **[RDC 858119 PTL GSG](https://edc.intel.com/content/www/us/en/secure/design/confidential/products-and-solutions/processors-and-chipsets/panther-lake-h/with-linux-os-get-started-guide-for-edge-platforms/)**, Chapter 3.
 
 1. Install Ubuntu 24.04 LTS (section 3.1).
-2. Download and extract `installer.zip` (Ubuntu Kernel Overlay Auto Installer Script) from **RDC 860689**.
+2. Download and extract `installer.zip` (Ubuntu Kernel Overlay Auto Installer Script) from **[RDC 860689](https://edc.intel.com/content/www/us/en/secure/design/confidential/products-and-solutions/processors-and-chipsets/panther-lake-h/with-linux-os-get-started-guide-for-edge-platforms/)**.
 3. Confirm Ubuntu proxy settings are correct. Otherwise, later steps may fail.
 4. Modify `installer.sh`:
 
