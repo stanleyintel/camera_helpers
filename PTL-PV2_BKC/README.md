@@ -68,6 +68,13 @@ Reference: **RDC 858119 PTL GSG**, Chapter 3.
 Configure BIOS according to **MIPI Camera Configuration for IPU75XA**:  
 https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/blob/release/26Q1.2/doc/isx031/userspace-gmsl.md#mipi-camera-configuration-for-ipu75xa
 
+Example of expected output in Ubuntu dmesg:
+
+   ```text
+   $ dmesg |grep ppr
+   [    2.999079] IPU ACPI: SSDB: name INTC031M:00. link 0. lanes 4. pprval 2. pprunit 4. degree 1806.18.23-nonrt-000
+   ```
+
 Set **Custom HID** to `INTC031M`.
 
 ## 3. Install PTL PV2 Required Packages
