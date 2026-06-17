@@ -101,9 +101,19 @@ Example of expected output in Ubuntu dmesg:
 
 Run [`8_post_check.sh`](./8_post_check.sh) after reboot to perform post-install validation:
 
-```bash
-./8_post_check.sh
-```
+  ```bash
+  $ ./8_post_check.sh
+  ```
+
+  The expected output should be [PASS] for all checks:
+
+   ```text
+   $ ./8_post_check.sh
+   [PASS] Installed camera HAL exists: /usr/lib/libcamhal.so
+   [PASS] Installed camera HAL plugin exists: /usr/lib/libcamhal/plugins/ipu75xa.so
+   (skip)
+
+   ```
 
 ## 5. Test D3 ISX031
 
