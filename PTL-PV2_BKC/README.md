@@ -11,7 +11,7 @@
 
 ## 1. Install the BKC Kernel
 
-Reference: **RDC 858119 PTL GSG**, Chapter 3.
+Reference: **[RDC 858119 PTL GSG](https://edc.intel.com/content/www/us/en/secure/design/confidential/products-and-solutions/processors-and-chipsets/panther-lake-h/with-linux-os-get-started-guide-for-edge-platforms/)**, Chapter 3.
 
 1. Install Ubuntu 24.04 LTS (section 3.1).
 2. Download and extract `installer.zip` (Ubuntu Kernel Overlay Auto Installer Script) from **RDC 860689**.
@@ -79,7 +79,7 @@ Example of expected output in Ubuntu dmesg:
 
 ## 3. Install PTL PV2 Required Packages
 
-1. Download and extract `Panther Lake - H HDMI Capture Software Packages for PV2 Release` from **RDC 860689**.
+1. Download and extract `Panther Lake - H HDMI Capture Software Packages for PV2 Release` from **[RDC 860689](https://www.intel.com/content/www/us/en/secure/design/confidential/software-kits/kit-details.html?kitId=860689)**.
 2. Follow section 4.2 to install IPU components:
 
    ```bash
