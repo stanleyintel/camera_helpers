@@ -7,7 +7,8 @@
 - [1. Install the BKC Kernel](#1-install-the-bkc-kernel)
 - [2. Configure BIOS for D3 ISX031](#2-configure-bios-for-d3-isx031)
 - [3. Install PTL PV2 Required Packages](#3-install-ptl-pv2-required-packages)
-- [4. Test D3 ISX031](#4-test-d3-isx031)
+- [4. Post Validation Check](#4-post-validation-check)
+- [5. Test D3 ISX031](#5-test-d3-isx031)
 
 ## 1. Install the BKC Kernel
 
@@ -96,7 +97,15 @@ Example of expected output in Ubuntu dmesg:
 3. Download and run [`7_do_post_install.sh`](./7_do_post_install.sh).  
    The script adds permissions for non-root users and then reboots the platform automatically.
 
-## 4. Test D3 ISX031
+## 4. Post Validation Check
+
+Run [`8_post_check.sh`](./8_post_check.sh) after reboot to perform post-install validation:
+
+```bash
+./8_post_check.sh
+```
+
+## 5. Test D3 ISX031
 
 1. DMA mode:
 

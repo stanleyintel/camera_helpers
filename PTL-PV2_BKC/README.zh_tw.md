@@ -7,7 +7,8 @@
 - [1. 安裝 BKC Kernel](#1-安裝-bkc-kernel)
 - [2. 設定 D3 ISX031 的 BIOS](#2-設定-d3-isx031-的-bios)
 - [3. 安裝 PTL PV2 必要套件](#3-安裝-ptl-pv2-必要套件)
-- [4. 測試 D3 ISX031](#4-測試-d3-isx031)
+- [4. 安裝後驗證檢查](#4-安裝後驗證檢查)
+- [5. 測試 D3 ISX031](#5-測試-d3-isx031)
 
 ## 1. 安裝 BKC Kernel
 
@@ -95,7 +96,15 @@ https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/blob/release/26Q
 3. 下載並執行 [`7_do_post_install.sh`](./7_do_post_install.sh)。  
    此腳本會先加入非 root 使用者權限，再自動重新開機平台。
 
-## 4. 測試 D3 ISX031
+## 4. 安裝後驗證檢查
+
+重新開機後請執行 [`8_post_check.sh`](./8_post_check.sh) 進行安裝後驗證：
+
+```bash
+./8_post_check.sh
+```
+
+## 5. 測試 D3 ISX031
 
 1. DMA 模式：
 
