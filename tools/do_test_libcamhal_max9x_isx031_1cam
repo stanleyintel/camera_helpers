@@ -1,0 +1,118 @@
+#!/bin/sh
+#
+
+set -eu
+
+usage() {
+    cat <<'EOF'
+Usage: do_test_libcamhal_max9x_isx031_1cam <camera-id> [--resolution WxH] [--dma | --mmap] [--dry]
+
+Options:
+  --resolution WxH  One of: 1920x1536, 1920x1080, 1280x720, 1024x768
+  --dma             Use icamerasrc dma_mode (default)
+  --mmap            Use icamerasrc mmap mode
+  --dry             Print the gst-launch command without executing it
+  -h, --help        Show this help
+EOF
+}
+
+if [ "$#" -lt 1 ]; then
+    usage >&2
+    exit 1
+fi
+
+camera_id=""
+resolution="1920x1536"
+io_mode="dma_mode"
+io_mode_set=0
+dry_run=0
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        --resolution)
+            [ "$#" -ge 2 ] || {
+                echo "Missing value for --resolution" >&2
+                exit 1
+            }
+            resolution="$2"
+            shift 2
+            ;;
+        --dma)
+            if [ "$io_mode_set" -eq 1 ] && [ "$io_mode" != "dma_mode" ]; then
+                echo "--dma and --mmap are mutually exclusive" >&2
+                exit 1
+            fi
+            io_mode="dma_mode"
+            io_mode_set=1
+            shift
+            ;;
+        --mmap)
+            if [ "$io_mode_set" -eq 1 ] && [ "$io_mode" != "mmap" ]; then
+                echo "--dma and --mmap are mutually exclusive" >&2
+                exit 1
+            fi
+            io_mode="mmap"
+            io_mode_set=1
+            shift
+            ;;
+        --dry)
+            dry_run=1
+            shift
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            usage >&2
+            exit 1
+            ;;
+        *)
+            if [ -z "$camera_id" ]; then
+                camera_id="$1"
+                shift
+            else
+                echo "Unexpected argument: $1" >&2
+                usage >&2
+                exit 1
+            fi
+            ;;
+    esac
+done
+
+[ -n "$camera_id" ] || {
+    echo "Missing camera-id" >&2
+    usage >&2
+    exit 1
+}
+
+case "$resolution" in
+    1920x1536|1920x1080|1280x720|1024x768)
+        width="${resolution%x*}"
+        height="${resolution#*x}"
+        ;;
+    *)
+        echo "Unsupported resolution: $resolution" >&2
+        exit 1
+        ;;
+esac
+
+device_name="isx031-$camera_id"
+
+if [ "$io_mode" = "dma_mode" ]; then
+    caps="'video/x-raw(memory:DMABuf),drm-format=UYVY,width=$width,height=$height'"
+    pipeline="fpsdisplaysink video-sink=glimagesink"
+else
+    caps="'video/x-raw,format=UYVY,width=$width,height=$height'"
+    pipeline="fpsdisplaysink video-sink=glimagesink"
+fi
+
+cmd="gst-launch-1.0 icamerasrc scene-mode=auto device-name=$device_name io-mode=$io_mode printfps=true ! $caps ! $pipeline"
+
+if [ "$dry_run" -eq 1 ]; then
+    printf '%s\n' "$cmd"
+    exit 0
+fi
+
+exec sh -c "$cmd"

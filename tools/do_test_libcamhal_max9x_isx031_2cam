@@ -1,0 +1,7 @@
+#!/bin/sh
+
+echo $1
+
+gst-launch-1.0 icamerasrc num-vc=2 scene-mode=auto device-name=isx031-$1 io-mode=dma_mode printfps=true ! 'video/x-raw(memory:DMABuf),drm-format=UYVY,width=1920,height=1536' ! fpsdisplaysink video-sink=glimagesink sync=false \
+               icamerasrc num-vc=2 scene-mode=auto device-name=isx031-$(( $1 + 1 )) io-mode=dma_mode printfps=true ! 'video/x-raw(memory:DMABuf),drm-format=UYVY,width=1920,height=1536' ! fpsdisplaysink video-sink=glimagesink sync=false 
+

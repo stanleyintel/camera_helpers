@@ -33,7 +33,7 @@ run sudo chmod -R o+rx /etc/camera/
 
 if [ ! -f /etc/udev/rules.d/99-ipu-psys.rules ]; then
   run sudo sh -c 'cat > /etc/udev/rules.d/99-ipu-psys.rules << "EOL"
-KERNEL=="$node", GROUP="video", MODE="0660"
+KERNEL=="ipu7-psys0", GROUP="video", MODE="0660"
 EOL'
 fi
 
