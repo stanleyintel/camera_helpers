@@ -70,6 +70,12 @@ https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/blob/release/26Q
 
 請將 **Custom HID** 設為 `INTC031M`。
 
+在 Ubuntu dmesg 的預期輸出範例：
+
+   ```text
+   $ dmesg |grep ppr
+   [    2.999079] IPU ACPI: SSDB: name INTC031M:00. link 0. lanes 4. pprval 2. pprunit 4. degree 1806.18.23-nonrt-000
+   ```
 ## 3. 安裝 PTL PV2 必要套件
 
 1. 從 **RDC 860689** 下載並解壓縮 `Panther Lake - H HDMI Capture Software Packages for PV2 Release`。
