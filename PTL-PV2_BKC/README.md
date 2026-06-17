@@ -112,7 +112,6 @@ Run [`8_post_check.sh`](./8_post_check.sh) after reboot to perform post-install 
    [PASS] Installed camera HAL exists: /usr/lib/libcamhal.so
    [PASS] Installed camera HAL plugin exists: /usr/lib/libcamhal/plugins/ipu75xa.so
    (skip)
-
    ```
 
 ## 5. Test D3 ISX031
