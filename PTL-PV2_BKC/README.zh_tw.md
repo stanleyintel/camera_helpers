@@ -11,10 +11,10 @@
 
 ## 1. 安裝 BKC Kernel
 
-參考文件：**RDC 858119 PTL GSG** 第 3 章。
+參考文件：**[RDC 858119 PTL GSG](https://edc.intel.com/content/www/us/en/secure/design/confidential/products-and-solutions/processors-and-chipsets/panther-lake-h/with-linux-os-get-started-guide-for-edge-platforms/)** 第 3 章。
 
 1. 依照 3.1 節安裝 Ubuntu 24.04 LTS。
-2. 從 **RDC 860689** 下載並解壓縮 `installer.zip`（Ubuntu Kernel Overlay Auto Installer Script）。
+2. 從 **[RDC 860689](https://edc.intel.com/content/www/us/en/secure/design/confidential/products-and-solutions/processors-and-chipsets/panther-lake-h/with-linux-os-get-started-guide-for-edge-platforms/)** 下載並解壓縮 `installer.zip`（Ubuntu Kernel Overlay Auto Installer Script）。
 3. 請先確認 Ubuntu Proxy 設定正確，否則後續步驟可能失敗。
 4. 修改 `installer.sh`：
 
@@ -78,7 +78,7 @@ https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/blob/release/26Q
    ```
 ## 3. 安裝 PTL PV2 必要套件
 
-1. 從 **RDC 860689** 下載並解壓縮 `Panther Lake - H HDMI Capture Software Packages for PV2 Release`。
+1. 從 **[RDC 860689](https://www.intel.com/content/www/us/en/secure/design/confidential/software-kits/kit-details.html?kitId=860689)** 下載並解壓縮 **`Panther Lake - H HDMI Capture Software Packages for PV2 Release`**。
 2. 依照 4.2 節安裝 IPU 元件：
 
    ```bash
