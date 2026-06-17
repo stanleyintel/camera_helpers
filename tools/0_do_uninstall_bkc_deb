@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DRY_RUN=false
+for arg in "$@"; do
+  case "$arg" in
+    --dry) DRY_RUN=true ;;
+    *)
+      echo "Unsupported argument: $arg" >&2
+      echo "Usage: $0 [--dry]" >&2
+      exit 1
+      ;;
+  esac
+done
+
+run() {
+  printf '+ '
+  printf '%q ' "$@"
+  printf '\n'
+  if ! $DRY_RUN; then
+    "$@"
+  fi
+}
+
+PACKAGE_PATTERN='icamerasrc|ipu6|ipu7xfw|libiaaiq|libiacss|ipu75xafw|libcamhal'
+
+if $DRY_RUN; then
+  echo "+ dpkg-query -W -f='\${Package}\\n' | grep -E '$PACKAGE_PATTERN' | sort -u"
+  echo "+ sudo dpkg --purge <matched packages from above>"
+else
+  mapfile -t packages < <(
+    dpkg-query -W -f='${Package}\n' | grep -E "$PACKAGE_PATTERN" | sort -u || true
+  )
+
+  if ((${#packages[@]} == 0)); then
+    echo "No installed packages matched: $PACKAGE_PATTERN"
+  else
+    echo "Purging previously installed camera packages:"
+    printf '  %s\n' "${packages[@]}"
+    run sudo dpkg --purge "${packages[@]}"
+  fi
+fi
+
+echo "Removing common manual-install leftovers."
+run sudo rm -rf \
+  /etc/camera/ipu6 \
+  /etc/camera/ipu6ep \
+  /etc/camera/ipu6epmtl \
+  /etc/camera/ipu7x \
+  /etc/camera/ipu75xa \
+  /usr/include/libcamhal \
+  /usr/lib/libcamhal
+run sudo rm -f \
+  /usr/lib/libcamhal.so* \
+  /usr/lib/libcamhal*.a \
+  /usr/lib/libcamhal*.la \
+  /usr/lib/gstreamer-1.0/libgsticamerasrc.so \
+  /usr/lib/pkgconfig/libcamhal.pc \
+  /usr/lib/pkgconfig/libgsticamerasrc.pc
