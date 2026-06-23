@@ -36,6 +36,8 @@ check_exists() {
   return 1
 }
 
+echo "=== Essential IPU packages check ==="
+
 check_exists "/usr/lib/libcamhal.so" "Installed camera HAL"
 check_exists "/usr/lib/libcamhal/plugins/ipu75xa.so" "Installed camera HAL plugin"
 check_exists "/etc/camera/ipu75xa/libcamhal_configs.json" "Installed camera HAL config"
@@ -159,6 +161,8 @@ if dmesg_log="$(sudo dmesg 2>/dev/null)"; then
 else
   fail "Unable to read dmesg with sudo"
 fi
+
+echo "=== Other packages check ==="
 
 check_pkg_from_download_01() {
   local pkg="$1"
