@@ -22,6 +22,8 @@ run() {
   fi
 }
 
+run /bin/rm -rf $HOME/.cache/gstreamer-1.0
+
 run sudo -E apt install -y v4l-utils
 
 run sudo chmod o+rx /usr/lib/libcamhal
@@ -30,14 +32,11 @@ run sudo chmod o+rx /usr/lib/libgsticamerainterface-1.0.so*
 run sudo chmod o+rx /usr/lib/gstreamer-1.0/libgsticamerasrc.so*
 run sudo chmod -R o+rx /etc/camera/
 
-
 if [ ! -f /etc/udev/rules.d/99-ipu-psys.rules ]; then
   run sudo sh -c 'cat > /etc/udev/rules.d/99-ipu-psys.rules << "EOL"
 KERNEL=="ipu7-psys0", ACTION=="add", GROUP="video", MODE="0660"
 EOL'
 fi
-
-
 
 if ! grep -q "^export GST_PLUGIN_PATH=" /etc/profile 2>/dev/null; then
   run sudo sh -c 'cat >> /etc/profile << "EOL"

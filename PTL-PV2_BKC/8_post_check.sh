@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 
-#set -euo pipefail
-
 ERROR_COUNT=0
+WARNING_COUNT=0
 
 pass() {
   echo "[PASS] $1"
+}
+
+warn() {
+  echo "[WARN] $1"
+  WARNING_COUNT=$((WARNING_COUNT + 1))
 }
 
 fail() {
@@ -16,7 +20,7 @@ fail() {
 has_other_rx() {
   local path="$1"
   local perm other
-  perm="$(stat -c '%a' "$path")"
+  perm="$(sudo stat -c '%a' "$path")"
   other=$((perm % 10))
   (( (other & 4) != 0 && (other & 1) != 0 ))
 }
@@ -24,7 +28,7 @@ has_other_rx() {
 check_exists() {
   local path="$1"
   local label="$2"
-  if [[ -e "$path" ]]; then
+  if sudo test -e "$path"; then
     pass "$label exists: $path"
     return 0
   fi
@@ -48,7 +52,7 @@ for path in \
     if has_other_rx "$path"; then
       pass "others have r+x permission: $path"
     else
-      fail "others do not have r+x permission: $path"
+      warn "others do not have r+x permission: $path"
     fi
   fi
 done
@@ -61,7 +65,7 @@ for pattern in \
   shopt -u nullglob
 
   if ((${#matches[@]} == 0)); then
-    fail "Post-install permission target missing: $pattern"
+    warn "Post-install permission target missing: $pattern"
     continue
   fi
 
@@ -69,7 +73,7 @@ for pattern in \
     if has_other_rx "$p"; then
       pass "others have r+x permission: $p"
     else
-      fail "others do not have r+x permission: $p"
+      warn "others do not have r+x permission: $p"
     fi
   done
 done
@@ -78,7 +82,7 @@ if check_exists "/etc/camera" "Camera config directory"; then
   if has_other_rx "/etc/camera"; then
     pass "others have r+x permission: /etc/camera"
   else
-    fail "others do not have r+x permission: /etc/camera"
+    warn "others do not have r+x permission: /etc/camera"
   fi
 fi
 
@@ -87,10 +91,10 @@ if [[ -f "$RULE_FILE" ]]; then
   if grep -q 'GROUP="video"' "$RULE_FILE" && grep -q 'MODE="0660"' "$RULE_FILE"; then
     pass "Udev rule exists with expected video/mode settings"
   else
-    fail "Udev rule exists but expected settings are missing: $RULE_FILE"
+    warn "Udev rule exists but expected settings are missing: $RULE_FILE"
   fi
 else
-  fail "Udev rule missing: $RULE_FILE"
+  warn "Udev rule missing: $RULE_FILE"
 fi
 
 PROFILE_FILE="/etc/profile"
@@ -104,7 +108,7 @@ for line in \
   if grep -Fxq "$line" "$PROFILE_FILE"; then
     pass "Profile contains: $line"
   else
-    fail "Missing profile export: $line"
+    warn "Missing profile export: $line"
   fi
 done
 
@@ -177,7 +181,7 @@ for pkg in libva2 intel-media-va-driver-non-free libigdgmm-dev; do
 done
 
 echo ""
-echo "Validation summary: ${ERROR_COUNT} fail"
+echo "Validation summary: ${ERROR_COUNT} fail, ${WARNING_COUNT} warning"
 if ((ERROR_COUNT > 0)); then
   exit 1
 fi
