@@ -75,7 +75,7 @@ https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/blob/release/26Q
 
    ```text
    $ dmesg |grep ppr
-   [    2.999079] IPU ACPI: SSDB: name INTC031M:00. link 0. lanes 4. pprval 2. pprunit 4. degree 1806.18.23-nonrt-000
+   [    2.999079] IPU ACPI: SSDB: name INTC031M:00. link 0. lanes 4. pprval 2. pprunit 4. degree 180
    ```
 ## 3. 安裝 PTL PV2 必要套件
 
