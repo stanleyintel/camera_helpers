@@ -1,0 +1,48 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Copilot <223556219+Copilot@users.noreply.github.com>
+Date: Tue, 23 Jun 2026 15:21:00 +0800
+Subject: [PATCH 2/2] media: ipu7: sync ACPI csi2 config with ep-aware isys ABI
+
+The IPU7 "get source pad according to csi2 ep fwnode" change extends
+struct ipu7_isys_csi2_config with a new fwnode endpoint pointer:
+
+    struct fwnode_handle *ep;
+
+However, the ACPI/platform-data side still defines and allocates the older
+shorter ipu_isys_csi2_config without that field. When the patched IPU7
+isys code reads csi2->ep on the ACPI path it reads beyond the end of the
+allocated object and may pass garbage into
+fwnode_graph_get_remote_endpoint(), leading to a rare fresh-boot OOPS.
+
+Synchronize the ACPI-side struct definition with the IPU7-side layout so
+the object size matches and ep is zero-initialized on the ACPI path.
+
+Symptom:
+- Rare fresh-boot OOPS in fwnode_graph_get_remote_endpoint()
+- Non-canonical fwnode pointer observed in the crash log
+
+Root cause:
+- ABI/layout mismatch between the IPU7 csi2 config struct and the ACPI
+  csi2 config struct after adding the ep field
+
+Solution:
+- Add the missing ep field to the ACPI-side struct definition
+
+---
+ include/media/ipu-acpi.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/include/media/ipu-acpi.h b/include/media/ipu-acpi.h
+index 0000000000000..0000000000000 100644
+--- a/include/media/ipu-acpi.h
++++ b/include/media/ipu-acpi.h
+@@ -31,6 +31,7 @@ struct ipu_isys_csi2_config {
+ 	unsigned int nlanes;
+ 	unsigned int port;
+ 	enum v4l2_mbus_type bus_type;
++	struct fwnode_handle *ep;
+ };
+ 
+ struct ipu_isys_subdev_i2c_info {
+-- 
+2.51.1
