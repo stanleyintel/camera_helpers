@@ -37,7 +37,6 @@ PTL PV2 BKC 的安裝流程請參考 [`../../PTL-PV2_BKC`](../../PTL-PV2_BKC)。
 | `5_do_clone_dkms_driver.sh` | 複製 `Intel-MIPI-CSI-Camera-Reference-Driver`、切到 commit `8c83b94`、更新 submodule，並套用本地 patch。 |
 | `6_do_build_dkms.sh` | 清除舊的 DKMS 狀態，然後為目前 kernel `add`、`build`、`install` `ipu-camera-sensor/0.1`。 |
 | `8_post_check.sh` | 驗證 patch 狀態、DKMS 安裝狀態、`modinfo max96717`、firmware 字串、dmesg 版本資訊，以及必要套件來源。 |
-| `999_do_bind_max9x_mono_isx031.sh` | 選用工具，用來重新建立 MAX9x + ISX031 的 media route 與預設格式。 |
 | `0002-media-ipu7-sync-acpi-csi2-config-abi.patch` | 第 1 步會複製並套用到 cloned reference driver repository 的 patch。 |
 
 ## 安裝流程

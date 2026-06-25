@@ -37,7 +37,6 @@ For the PTL PV2 BKC installation flow, see [`../../PTL-PV2_BKC`](../../PTL-PV2_B
 | `5_do_clone_dkms_driver.sh` | Clones `Intel-MIPI-CSI-Camera-Reference-Driver`, checks out commit `8c83b94`, updates submodules, and applies the local patch. |
 | `6_do_build_dkms.sh` | Removes old DKMS state, then adds, builds, and installs `ipu-camera-sensor/0.1` for the active kernel. |
 | `8_post_check.sh` | Verifies patch state, DKMS install state, `modinfo max96717`, firmware strings, dmesg firmware version lines, and required package sources. |
-| `999_do_bind_max9x_mono_isx031.sh` | Optional helper to rebuild media routes and default formats for MAX9x + ISX031 setups. |
 | `0002-media-ipu7-sync-acpi-csi2-config-abi.patch` | Patch copied into the cloned reference driver repository and applied by step 1. |
 
 ## Installation Workflow
