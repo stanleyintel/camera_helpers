@@ -55,7 +55,7 @@ if [[ ! -f "$BUILD_SCRIPT" ]]; then
   exit 1
 fi
 
-run sudo apt install -y \
+run sudo -E apt install -y \
   libexpat-dev \
   automake \
   libtool \

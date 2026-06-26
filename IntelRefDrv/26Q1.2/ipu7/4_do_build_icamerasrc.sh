@@ -37,7 +37,7 @@ if [[ ! -d "$REPO_DIR" ]]; then
   exit 1
 fi
 
-run sudo apt install -y \
+run sudo -E apt install -y \
   libdrm-dev \
   libva-dev \
   libgstreamer-plugins-bad1.0-dev

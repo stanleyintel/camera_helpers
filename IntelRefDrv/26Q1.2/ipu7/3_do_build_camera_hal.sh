@@ -37,7 +37,7 @@ if [[ ! -d "$REPO_DIR" ]]; then
   exit 1
 fi
 
-run sudo apt install -y \
+run sudo -E apt install -y \
   libexpat-dev \
   libjsoncpp-dev \
   automake \
