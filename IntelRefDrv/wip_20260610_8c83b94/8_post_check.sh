@@ -3,6 +3,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CURRENT_DIR="$(pwd)"
 DRIVER_DIR="$CURRENT_DIR/Intel-MIPI-CSI-Camera-Reference-Driver"
+REQUIRED_IASL_VERSION="20260408"
 
 ERROR_COUNT=0
 WARNING_COUNT=0
@@ -21,6 +22,12 @@ fail() {
   ERROR_COUNT=$((ERROR_COUNT + 1))
 }
 
+get_iasl_version() {
+  local version_out
+  version_out="$(iasl --version 2>&1 || true)"
+  grep -Eo 'version[[:space:]]+[0-9]{8}' <<<"$version_out" | awk '{print $2}' | head -n1
+}
+
 check_exists() {
   local path="$1"
   local label="$2"
@@ -31,6 +38,20 @@ check_exists() {
   fail "$label missing: $path"
   return 1
 }
+
+echo "=== 2_do_build_install_acpica.sh check ==="
+if ! command -v iasl >/dev/null 2>&1; then
+  fail "iasl is not in PATH"
+else
+  IASL_VERSION="$(get_iasl_version)"
+  if [[ -z "$IASL_VERSION" ]]; then
+    fail "Unable to parse iasl version from: iasl --version"
+  elif ((10#$IASL_VERSION >= 10#$REQUIRED_IASL_VERSION)); then
+    pass "iasl version is $IASL_VERSION (required: $REQUIRED_IASL_VERSION or newer)"
+  else
+    fail "iasl version is too old: $IASL_VERSION (required: $REQUIRED_IASL_VERSION or newer)"
+  fi
+fi
 
 echo "=== 5_do_clone_dkms_driver.sh check ==="
 PATCH_SRC="$SCRIPT_DIR/0002-media-ipu7-sync-acpi-csi2-config-abi.patch"
