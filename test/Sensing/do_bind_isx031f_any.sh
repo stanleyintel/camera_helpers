@@ -2,6 +2,12 @@
 
 set -eux
 
+dry_run=0
+if [ "${1:-}" = "--dry" ]; then
+    dry_run=1
+    shift
+fi
+
 v4l2_version_line="$(v4l2-ctl --version | sed -n '1p')"
 v4l2_version="$(echo "$v4l2_version_line" | sed -n 's/^v4l2-ctl \([0-9][0-9.]*\).*/\1/p')"
 v4l2_major="$(echo "$v4l2_version" | cut -d. -f1)"
@@ -18,7 +24,7 @@ if [ "$v4l2_major" -lt 1 ] || { [ "$v4l2_major" -eq 1 ] && [ "$v4l2_minor" -lt 3
 fi
 
 if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <a|b|c|d> <0|2>" >&2
+    echo "Usage: $0 [--dry] <a|b|c|d> <0|2>" >&2
     exit 1
 fi
 
@@ -52,7 +58,7 @@ case "$lane" in
         ;;
     *)
         echo "Invalid lane: $lane" >&2
-        echo "Usage: $0 <a|b|c|d> <0|2>" >&2
+        echo "Usage: $0 [--dry] <a|b|c|d> <0|2>" >&2
         exit 1
         ;;
 esac
@@ -74,7 +80,7 @@ case "$port" in
         ;;
     *)
         echo "Invalid port: $port" >&2
-        echo "Usage: $0 <a|b|c|d> <0|2>" >&2
+        echo "Usage: $0 [--dry] <a|b|c|d> <0|2>" >&2
         exit 1
         ;;
 esac
@@ -93,19 +99,26 @@ video_alias="/dev/video-isx031f-${lane}-${port}"
 #   isx031f <lane>-<port> -> max9x <lane>-<port> -> max9x <a|c>
 #   -> Intel IPU7 CSI2 <0|2> -> Intel IPU7 ISYS Capture <N>
 
-media-ctl -d /dev/media0 -R "\"${remote_entity}\"[0/0->2/0[1]]"
-media-ctl -d /dev/media0 -R "\"${parent_entity}\"[${parent_sink_pad}/0->0/0[1]]"
-media-ctl -d /dev/media0 -R "\"${csi_entity}\"[0/0->${csi_source_pad}/0[1]]"
+run() {
+    if [ "$dry_run" -eq 1 ]; then
+        printf '%s\n' "$*"
+    else
+        "$@"
+    fi
+}
 
-media-ctl -d /dev/media0 -V "\"${sensor_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
-media-ctl -d /dev/media0 -V "\"${remote_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
-media-ctl -d /dev/media0 -V "\"${remote_entity}\":2/0 [fmt:UYVY8_1X16/1920x1536]"
-media-ctl -d /dev/media0 -V "\"${parent_entity}\":${parent_sink_pad}/0 [fmt:UYVY8_1X16/1920x1536]"
-media-ctl -d /dev/media0 -V "\"${parent_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
-media-ctl -d /dev/media0 -V "\"${csi_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
-media-ctl -d /dev/media0 -V "\"${csi_entity}\":${csi_source_pad}/0 [fmt:UYVY8_1X16/1920x1536]"
+run media-ctl -d /dev/media0 -R "\"${remote_entity}\"[0/0->2/0[1]]"
+run media-ctl -d /dev/media0 -R "\"${parent_entity}\"[${parent_sink_pad}/0->0/0[1]]"
+run media-ctl -d /dev/media0 -R "\"${csi_entity}\"[0/0->${csi_source_pad}/0[1]]"
 
-media-ctl -d /dev/media0 -l "\"${csi_entity}\":${csi_source_pad} -> \"${capture_entity}\":0[1]"
+run media-ctl -d /dev/media0 -V "\"${sensor_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
+run media-ctl -d /dev/media0 -V "\"${remote_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
+run media-ctl -d /dev/media0 -V "\"${remote_entity}\":2/0 [fmt:UYVY8_1X16/1920x1536]"
+run media-ctl -d /dev/media0 -V "\"${parent_entity}\":${parent_sink_pad}/0 [fmt:UYVY8_1X16/1920x1536]"
+run media-ctl -d /dev/media0 -V "\"${parent_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
+run media-ctl -d /dev/media0 -V "\"${csi_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
+run media-ctl -d /dev/media0 -V "\"${csi_entity}\":${csi_source_pad}/0 [fmt:UYVY8_1X16/1920x1536]"
 
-v4l2-ctl -d "$video_alias" --set-fmt-video=width=1920,height=1536,pixelformat=UYVY
+run media-ctl -d /dev/media0 -l "\"${csi_entity}\":${csi_source_pad} -> \"${capture_entity}\":0[1]"
 
+run v4l2-ctl -d "$video_alias" --set-fmt-video=width=1920,height=1536,pixelformat=UYVY

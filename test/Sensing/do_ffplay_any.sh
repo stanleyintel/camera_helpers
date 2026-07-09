@@ -2,8 +2,14 @@
 
 set -eu
 
+dry_run=0
+if [ "${1:-}" = "--dry" ]; then
+    dry_run=1
+    shift
+fi
+
 if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <a|b|c|d> <0|2>" >&2
+    echo "Usage: $0 [--dry] <a|b|c|d> <0|2>" >&2
     exit 1
 fi
 
@@ -29,7 +35,7 @@ case "$lane" in
         ;;
     *)
         echo "Invalid lane: $lane" >&2
-        echo "Usage: $0 <a|b|c|d> <0|2>" >&2
+        echo "Usage: $0 [--dry] <a|b|c|d> <0|2>" >&2
         exit 1
         ;;
 esac
@@ -43,9 +49,14 @@ case "$port" in
         ;;
     *)
         echo "Invalid port: $port" >&2
-        echo "Usage: $0 <a|b|c|d> <0|2>" >&2
+        echo "Usage: $0 [--dry] <a|b|c|d> <0|2>" >&2
         exit 1
         ;;
 esac
+
+if [ "$dry_run" -eq 1 ]; then
+    printf '%s\n' "ffplay -f v4l2 -input_format uyvy422 -video_size 1920x1536 -framerate 30 /dev/video${capture_index}"
+    exit 0
+fi
 
 exec ffplay -f v4l2 -input_format uyvy422 -video_size 1920x1536 -framerate 30 "/dev/video${capture_index}"
