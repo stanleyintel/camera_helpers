@@ -20,8 +20,8 @@ v4l2-ctl -d /dev/video0 --set-fmt-video=width=1920,height=1536,pixelformat=UYVY
 
 # Test commands:
 ## yavta
-### yavta -c10 -f UYVY -s 1920x1536 -F /tmp/isx031f-1-#.uyvy /dev/video0
+### yavta -c10 -f UYVY -s 1920x1536 --file=/tmp/isx031f-1-#.uyvy /dev/video0
 
-## v4l2src
+## v4l2src (colormetry issue)
 ###  gst-launch-1.0 -e -v v4l2src device=/dev/video0 ! video/x-raw,width=1920,height=1536,format=UYVY,pixel-aspect-ratio=1/1,framerate=30/1 ! videoconvert ! xvimagesink
 
