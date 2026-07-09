@@ -1,11 +1,15 @@
 #!/bin/sh
 
-set -eux
+set -eu
 
 dry_run=0
 if [ "${1:-}" = "--dry" ]; then
     dry_run=1
     shift
+fi
+
+if [ "$dry_run" -eq 0 ]; then
+    set -x
 fi
 
 v4l2_version_line="$(v4l2-ctl --version | sed -n '1p')"
