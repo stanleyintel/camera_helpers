@@ -39,7 +39,7 @@
    ```diff
    run "git clone https://github.com/intel/linux-kernel-overlay.git -b $release_tag"
    + run "sed -i 's/^COMPILE_TEST=y$/CONFIG_COMPILE_TEST=y/' linux-kernel-overlay/kernel-config/features/security.cfg"
-   + run "sed -i '/^CONFIG_INTEL_IPU6_ACPI=m$/a CONFIG_I2C_ATR=m' linux-kernel-overlay/kernel-config/features/ipu.cfg"
+   + run "sed -i '/^CONFIG_INTEL_IPU_ACPI=m$/a CONFIG_I2C_ATR=m' linux-kernel-overlay/kernel-config/features/ipu.cfg"
    ```
 
    - 約第 337 行 (選用但建議：增加對未來 DKMS build 的支持):
