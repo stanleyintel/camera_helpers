@@ -69,7 +69,7 @@ Reference: **[RDC 858119 PTL GSG](https://edc.intel.com/content/www/us/en/secure
    6.18.23-nonrt-000
    ```
 
-7. For full details of what `installer.zip` installs and executes, refer to PTL GSG.
+7. For full details of what `installer.sh` installs and executes, refer to PTL GSG.
 
 ## 2. Configure BIOS for D3 ISX031
 

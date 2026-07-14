@@ -69,7 +69,7 @@
    6.18.23-nonrt-000
    ```
 
-7. 若要了解 `installer.zip` 會執行與安裝的完整內容，請參考 PTL GSG。
+7. 若要了解 `installer.sh` 會執行與安裝的完整內容，請參考 PTL GSG。
 
 ## 2. 設定 D3 ISX031 的 BIOS
 
