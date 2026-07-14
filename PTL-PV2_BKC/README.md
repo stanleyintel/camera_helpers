@@ -34,7 +34,14 @@ Reference: **[RDC 858119 PTL GSG](https://edc.intel.com/content/www/us/en/secure
    +    run "./build.sh -r no -t nonrt-000"
    ```
 
-   - Around line 336 (optional but recommended: add config for future dkms build):
+   - Around line 288 (optional but recommended: add config for future dkms build):
+
+   ```diff
+   run "git clone https://github.com/intel/linux-kernel-overlay.git -b $release_tag"
+   + run "sed -i 's/^COMPILE_TEST=y$/CONFIG_COMPILE_TEST=y/' linux-kernel-overlay/kernel-config/features/security.cfg"
+   ```
+
+   - Around line 337 (optional but recommended: add config for future dkms build):
 
    ```diff
    echo "$kernel_entry"

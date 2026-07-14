@@ -34,7 +34,14 @@
    +    run "./build.sh -r no -t nonrt-000"
    ```
 
-   - 約第 336 行 (選用但建議：增加對未來 DKMS build 的支持):
+   - 約第 288 行（選用但建議：增加未來 DKMS build 所需設定）：
+
+   ```diff
+   run "git clone https://github.com/intel/linux-kernel-overlay.git -b $release_tag"
+   + run "sed -i 's/^COMPILE_TEST=y$/CONFIG_COMPILE_TEST=y/' linux-kernel-overlay/kernel-config/features/security.cfg"
+   ```
+
+   - 約第 337 行 (選用但建議：增加對未來 DKMS build 的支持):
 
    ```diff
    echo "$kernel_entry"
