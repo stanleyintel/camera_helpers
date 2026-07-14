@@ -36,6 +36,22 @@ check_exists() {
   return 1
 }
 
+KERNEL_RELEASE="$(uname -r)"
+
+echo "=== BKC kernel check ==="
+
+for check_path_and_label in \
+  "/lib/modules/${KERNEL_RELEASE}/build/.config|Kernel config" \
+  "/lib/modules/${KERNEL_RELEASE}/kernel/drivers/i2c/i2c-atr.ko|i2c-atr kernel module"; do
+  path="${check_path_and_label%%|*}"
+  label="${check_path_and_label##*|}"
+  if sudo test -e "$path"; then
+    pass "$label exists: $path"
+  else
+    warn "$label missing: $path"
+  fi
+done
+
 echo "=== Essential IPU packages check ==="
 
 check_exists "/usr/lib/libcamhal.so" "Installed camera HAL"
