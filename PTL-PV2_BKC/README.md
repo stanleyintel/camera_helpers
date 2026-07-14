@@ -39,6 +39,7 @@ Reference: **[RDC 858119 PTL GSG](https://edc.intel.com/content/www/us/en/secure
    ```diff
    run "git clone https://github.com/intel/linux-kernel-overlay.git -b $release_tag"
    + run "sed -i 's/^COMPILE_TEST=y$/CONFIG_COMPILE_TEST=y/' linux-kernel-overlay/kernel-config/features/security.cfg"
+   + run "sed -i '/^CONFIG_INTEL_IPU6_ACPI=m$/a CONFIG_I2C_ATR=m' linux-kernel-overlay/kernel-config/features/ipu.cfg"
    ```
 
    - Around line 337 (optional but recommended: add config for future dkms build):
