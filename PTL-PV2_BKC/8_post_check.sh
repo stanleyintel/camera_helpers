@@ -37,8 +37,15 @@ check_exists() {
 }
 
 KERNEL_RELEASE="$(uname -r)"
+EXPECTED_KERNEL_RELEASE="6.18.23-nonrt-000"
 
 echo "=== BKC kernel check ==="
+
+if [[ "$KERNEL_RELEASE" == "$EXPECTED_KERNEL_RELEASE" ]]; then
+  pass "Kernel version matches expected BKC release: $KERNEL_RELEASE"
+else
+  warn "Kernel version is $KERNEL_RELEASE, expected $EXPECTED_KERNEL_RELEASE"
+fi
 
 for check_path_and_label in \
   "/lib/modules/${KERNEL_RELEASE}/build/.config|Kernel config" \
