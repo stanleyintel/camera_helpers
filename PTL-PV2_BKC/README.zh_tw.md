@@ -17,37 +17,13 @@
 1. 依照 3.1 節安裝 Ubuntu 24.04 LTS。
 2. 從 **[RDC 860689](https://edc.intel.com/content/www/us/en/secure/design/confidential/products-and-solutions/processors-and-chipsets/panther-lake-h/with-linux-os-get-started-guide-for-edge-platforms/)** 下載並解壓縮 `installer.zip`（Ubuntu Kernel Overlay Auto Installer Script）。
 3. 請先確認 Ubuntu Proxy 設定正確，否則後續步驟可能失敗。
-4. 修改 `installer.sh`：
+4. 下載並儲存 [`ptl_pv2_installer.patch`](./ptl_pv2_installer.patch) 到與 `installer.sh` 相同的資料夾，然後在該資料夾執行：
 
-   - 約第 174 行：
-
-   ```diff
-   - run "echo 'N' | apt upgrade -y"
-   + run "echo 'N' | apt upgrade -y --allow-downgrades"
+   ```bash
+   patch < ptl_pv2_installer.patch
    ```
 
-   - 約第 295 行（選用但建議：加入 localversion 資訊）：
-
-   ```diff
-   if [ "$variant" == "default" ]; then
-   -    run "./build.sh -r no"
-   +    run "./build.sh -r no -t nonrt-000"
-   ```
-
-   - 約第 288 行（選用但建議：增加未來 DKMS build 所需設定）：
-
-   ```diff
-   run "git clone https://github.com/intel/linux-kernel-overlay.git -b $release_tag"
-   + run "sed -i 's/^COMPILE_TEST=y$/CONFIG_COMPILE_TEST=y/' linux-kernel-overlay/kernel-config/features/security.cfg"
-   + run "sed -i '/^CONFIG_INTEL_IPU_ACPI=m$/a CONFIG_I2C_ATR=m' linux-kernel-overlay/kernel-config/features/ipu.cfg"
-   ```
-
-   - 約第 337 行 (選用但建議：增加對未來 DKMS build 的支持):
-
-   ```diff
-   echo "$kernel_entry"
-   +  run "install -D -m 644 ${current_workspace}/linux-kernel-overlay/kernel.config /lib/modules/${kernel_entry}/build/.config"
-   ```
+   此 patch 可改善 apt 套件安裝流程、加入 kernel localversion 資訊，並為後續 DKMS build 預作準備。
 
 5. 執行安裝指令（3.2.2 節）：
 

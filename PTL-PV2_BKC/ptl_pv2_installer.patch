@@ -1,0 +1,81 @@
+--- a/installer.sh	2026-07-15 10:17:50.833288241 +0800
++++ b/installer.sh	2026-07-15 10:14:02.668923841 +0800
+@@ -134,6 +134,17 @@
+ }
+ 
+ ##################################################################
++##..............repair broken packages............................
++repair_broken_packages()
++{
++	if ! apt-get check >/dev/null 2>&1; then
++		echo "Detected broken package dependencies. Repairing apt state..."
++		run "DEBIAN_FRONTEND=noninteractive apt-get install -f -y --allow-downgrades"
++		run "apt-get check"
++	fi
++}
++
++##################################################################
+ ##..............download GPG Key .................................
+ download_gpg_key()
+ {
+@@ -170,8 +181,9 @@
+ ##.............. Update PPA ......................................
+ PPAUpdate() {
+ 	echo "$(date): Adding PPA & GPG Key..." 
+-	run "apt update" 
+-	run "echo 'N' | apt upgrade -y"
++	run "apt-get update"
++	repair_broken_packages
++	run "DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --allow-downgrades"
+ 	run "DEBIAN_FRONTEND=noninteractive apt-get install ethtool libbpf1 wayland-protocols -y"
+ 
+ 	if [[ $os_version == "UBUNTU_NOBLE" ]]
+@@ -189,7 +201,7 @@
+ 	else
+ 		echo -e "Package: *\nPin: release o=intel-iot-linux-overlay\nPin-Priority: 2000" | tee /etc/apt/preferences.d/intel-"$platform" 
+ 	fi
+-	run "apt update"
++	run "apt-get update"
+ 	return 0
+ }
+ 
+@@ -252,6 +264,13 @@
+ 		echo "$url"
+ 		run "wget ${url} --no-check-certificate"
+ 	done
++	if dpkg-query -W -f='${Status}' libze1 2>/dev/null | grep -q "install ok installed"; then
++		echo "libze1 is already installed; skipping overlapping level-zero packages."
++		if dpkg-query -W level-zero-devel >/dev/null 2>&1; then
++			run "dpkg --remove --force-remove-reinstreq level-zero-devel"
++		fi
++		run "rm -f level-zero_*.deb level-zero-devel_*.deb"
++	fi
+ 	if [ "$platform" == "PTL" ] || [ "$platform" == "WCL" ] || [ "$platform" == "MTL" ] || [ "$platform" == "ARL" ] || [ "$platform" == "NVL" ];
+ 	then
+ 		run "dpkg --purge --force-remove-reinstreq intel-driver-compiler-npu intel-fw-npu intel-level-zero-npu intel-level-zero-npu-dbgsym"
+@@ -285,6 +304,8 @@
+ 		rm -rf linux-kernel-overlay
+ 	fi
+ 	run "git clone https://github.com/intel/linux-kernel-overlay.git -b $release_tag"
++	run "sed -i 's/^COMPILE_TEST=y$/CONFIG_COMPILE_TEST=y/' linux-kernel-overlay/kernel-config/features/security.cfg"
++  run "sed -i '/^CONFIG_INTEL_IPU_ACPI=m$/a CONFIG_I2C_ATR=m' linux-kernel-overlay/kernel-config/features/ipu.cfg"
+ 	run "cd linux-kernel-overlay"
+ 	run "sed -i 's|KERNELRELEASE=\`make kernelversion\`-\${customized_kver_string}-\${timestamp,,}|KERNELRELEASE=${image_name}|g' \"${PWD}/build.sh\""
+ 	
+@@ -292,7 +313,7 @@
+ 		run "./build.sh"
+ 	else
+ 		if [ "$variant" == "default" ]; then
+-			run "./build.sh -r no"
++			run "./build.sh -r no -t nonrt-000"
+ 		elif [ "$variant" == "rt" ]; then
+ 			run "./build.sh -r yes"
+ 		fi
+@@ -333,6 +354,7 @@
+ 	kernel_entry=${kernel_pkg#linux-image-}
+ 	echo "The kernel entry is:"
+ 	echo "$kernel_entry"
++	run "install -D -m 644 ${current_workspace}/linux-kernel-overlay/kernel.config /lib/modules/${kernel_entry}/build/.config"
+ 	echo "Update grub corresponding to kernels entry "
+ 	run "sed -i 's/GRUB_DEFAULT=.*/GRUB_DEFAULT=\"Advanced options for Ubuntu>Ubuntu, with Linux ${kernel_entry}\"/' /etc/default/grub"
+ 	run "sed -e 's@^GRUB_TIMEOUT_STYLE=hidden@# GRUB_TIMEOUT_STYLE=hidden@' -e 's@^GRUB_TIMEOUT=0@GRUB_TIMEOUT=5@g' -i /etc/default/grub"

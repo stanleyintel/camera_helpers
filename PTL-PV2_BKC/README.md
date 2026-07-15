@@ -17,37 +17,13 @@ Reference: **[RDC 858119 PTL GSG](https://edc.intel.com/content/www/us/en/secure
 1. Install Ubuntu 24.04 LTS (section 3.1).
 2. Download and extract `installer.zip` (Ubuntu Kernel Overlay Auto Installer Script) from **[RDC 860689](https://edc.intel.com/content/www/us/en/secure/design/confidential/products-and-solutions/processors-and-chipsets/panther-lake-h/with-linux-os-get-started-guide-for-edge-platforms/)**.
 3. Confirm Ubuntu proxy settings are correct. Otherwise, later steps may fail.
-4. Modify `installer.sh`:
+4. Download and save [`ptl_pv2_installer.patch`](./ptl_pv2_installer.patch) in the same folder as `installer.sh`, then apply it there:
 
-   - Around line 174:
-
-   ```diff
-   - run "echo 'N' | apt upgrade -y"
-   + run "echo 'N' | apt upgrade -y --allow-downgrades"
+   ```bash
+   patch < ptl_pv2_installer.patch
    ```
 
-   - Around line 295 (optional but recommended: add localversion info):
-
-   ```diff
-   if [ "$variant" == "default" ]; then
-   -    run "./build.sh -r no"
-   +    run "./build.sh -r no -t nonrt-000"
-   ```
-
-   - Around line 288 (optional but recommended: add config for future dkms build):
-
-   ```diff
-   run "git clone https://github.com/intel/linux-kernel-overlay.git -b $release_tag"
-   + run "sed -i 's/^COMPILE_TEST=y$/CONFIG_COMPILE_TEST=y/' linux-kernel-overlay/kernel-config/features/security.cfg"
-   + run "sed -i '/^CONFIG_INTEL_IPU_ACPI=m$/a CONFIG_I2C_ATR=m' linux-kernel-overlay/kernel-config/features/ipu.cfg"
-   ```
-
-   - Around line 337 (optional but recommended: add config for future dkms build):
-
-   ```diff
-   echo "$kernel_entry"
-   +  run "install -D -m 644 ${current_workspace}/linux-kernel-overlay/kernel.config /lib/modules/${kernel_entry}/build/.config"
-   ```
+   This patch improves the apt package install flow, adds kernel localversion info, and prepares the installer for future DKMS builds.
 
 5. Run the installer command (section 3.2.2):
 
