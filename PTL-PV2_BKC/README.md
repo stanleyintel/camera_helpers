@@ -81,9 +81,12 @@ Example of expected output in Ubuntu dmesg:
 3. Download and run [`7_do_post_install.sh`](./7_do_post_install.sh).  
    The script adds permissions for non-root users and then reboots the platform automatically.
 
+4. Download and run [`8_do_post_build_v4l.sh`](./8_do_post_build_v4l.sh).
+   The script checks and build v4l-utils if required.
+
 ## 4. Post Validation Check
 
-Run [`9_post_check.sh`](./9_post_check.sh) after reboot to perform post-install validation:
+Run [`9_post_check.sh`](./9_post_check.sh) after `8_do_post_build_v4l.sh` to perform post-install validation:
 
   ```bash
   $ ./9_post_check.sh

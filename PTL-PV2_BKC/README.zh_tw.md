@@ -80,9 +80,12 @@ https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/blob/release/26Q
 3. 下載並執行 [`7_do_post_install.sh`](./7_do_post_install.sh)。  
    此腳本會先加入非 root 使用者權限，再自動重新開機平台。
 
+4. 下載並執行 [`8_do_post_build_v4l.sh`](./8_do_post_build_v4l.sh)。
+   此腳本會檢查 v4l-utils 版本，若有需要會自動從原始碼重新 build 並安裝較新的版本。
+
 ## 4. 安裝後驗證檢查
 
-重新開機後請執行 [`9_post_check.sh`](./9_post_check.sh) 進行安裝後驗證：
+執行完 [`8_do_post_build_v4l.sh`](./8_do_post_build_v4l.sh) 後，請執行 [`9_post_check.sh`](./9_post_check.sh) 進行安裝後驗證：
 
   ```bash
   $ ./9_post_check.sh
