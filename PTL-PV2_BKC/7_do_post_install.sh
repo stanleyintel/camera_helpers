@@ -24,7 +24,9 @@ run() {
 
 run /bin/rm -rf $HOME/.cache/gstreamer-1.0
 
-run sudo -E apt install -y v4l-utils
+# dkms is to build dkms drivers
+# meson is to build v4l-utils
+run sudo -E apt install -y dkms yavta meson
 
 run sudo chmod o+rx /usr/lib/libcamhal
 run sudo chmod o+rx /usr/lib/libcamhal/plugins/
