@@ -82,15 +82,15 @@ https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/blob/release/26Q
 
 ## 4. 安裝後驗證檢查
 
-重新開機後請執行 [`8_post_check.sh`](./8_post_check.sh) 進行安裝後驗證：
+重新開機後請執行 [`9_post_check.sh`](./9_post_check.sh) 進行安裝後驗證：
 
   ```bash
-  $ ./8_post_check.sh
+  $ ./9_post_check.sh
   ```
 
 
   ```text
-  $ ./8_post_check.sh
+  $ ./9_post_check.sh
   [PASS] Installed camera HAL exists: /usr/lib/libcamhal.so
   [PASS] Installed camera HAL plugin exists: /usr/lib/libcamhal/plugins/ipu75xa.so
   (skip)
