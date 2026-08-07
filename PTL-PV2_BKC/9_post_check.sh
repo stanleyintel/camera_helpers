@@ -17,6 +17,12 @@ fail() {
   ERROR_COUNT=$((ERROR_COUNT + 1))
 }
 
+check_min_version() {
+  local actual="$1"
+  local minimum="$2"
+  [[ "$(printf '%s\n%s\n' "$minimum" "$actual" | sort -V | head -n1)" == "$minimum" ]]
+}
+
 has_other_rx() {
   local path="$1"
   local perm other
@@ -136,6 +142,17 @@ for line in \
     warn "Missing profile export: $line"
   fi
 done
+
+echo "=== 8_do_post_build_v4l.sh check ==="
+
+MEDIA_CTL_VERSION="$(media-ctl --version 2>/dev/null | awk '/^media-ctl / {print $2; exit}')"
+if [[ -z "$MEDIA_CTL_VERSION" ]]; then
+  fail "Unable to get media-ctl version"
+elif check_min_version "$MEDIA_CTL_VERSION" "1.31"; then
+  pass "media-ctl version is new enough: $MEDIA_CTL_VERSION"
+else
+  fail "media-ctl version is too old: $MEDIA_CTL_VERSION (need >= 1.31)"
+fi
 
 echo "=== IPU FW check ==="
 
