@@ -67,6 +67,93 @@ case "$lane" in
         ;;
 esac
 
+lane_from_parent_pad() {
+    case "$1" in
+        4) echo a ;;
+        5) echo b ;;
+        6) echo c ;;
+        7) echo d ;;
+    esac
+}
+
+lane_parent_sink_pad() {
+    case "$1" in
+        a) echo 4 ;;
+        b) echo 5 ;;
+        c) echo 6 ;;
+        d) echo 7 ;;
+    esac
+}
+
+lane_csi_source_pad() {
+    case "$1" in
+        a) echo 1 ;;
+        b) echo 2 ;;
+        c) echo 3 ;;
+        d) echo 4 ;;
+    esac
+}
+
+lane_capture_index() {
+    lane_name="$1"
+    port_name="$2"
+
+    case "${port_name}:${lane_name}" in
+        0:a) echo 0 ;;
+        0:b) echo 1 ;;
+        0:c) echo 2 ;;
+        0:d) echo 3 ;;
+        2:a) echo 16 ;;
+        2:b) echo 17 ;;
+        2:c) echo 18 ;;
+        2:d) echo 19 ;;
+    esac
+}
+
+append_lane() {
+    lane_name="$1"
+    [ -n "$lane_name" ] || return 0
+
+    for existing_lane in $selected_lanes; do
+        if [ "$existing_lane" = "$lane_name" ]; then
+            return 0
+        fi
+    done
+
+    if [ -n "$selected_lanes" ]; then
+        selected_lanes="$selected_lanes $lane_name"
+    else
+        selected_lanes="$lane_name"
+    fi
+}
+
+active_parent_pads() {
+    media-ctl -d /dev/media0 -p | awk -v entity="$1" '
+        /^- entity [0-9]+: / {
+            if (in_entity) {
+                exit
+            }
+
+            line=$0
+            sub(/^- entity [0-9]+: /, "", line)
+            name=line
+            sub(/ \(.*$/, "", name)
+            if (name == entity) {
+                in_entity=1
+                next
+            }
+        }
+        in_entity && /^[[:space:]]*routes:/ { in_routes=1; next }
+        in_entity && in_routes && /^[[:space:]]*pad[0-9]+:/ { exit }
+        in_entity && in_routes && /\[ACTIVE\]/ {
+            line=$0
+            sub(/^[[:space:]]*/, "", line)
+            split(line, parts, "/")
+            print parts[1]
+        }
+    '
+}
+
 case "$port" in
     0)
         sensor_entity="isx031f ${lane}-0"
@@ -111,18 +198,83 @@ run() {
     fi
 }
 
-run media-ctl -d /dev/media0 -R "\"${remote_entity}\"[0/0->2/0[1]]"
-run media-ctl -d /dev/media0 -R "\"${parent_entity}\"[${parent_sink_pad}/0->0/0[1]]"
-run media-ctl -d /dev/media0 -R "\"${csi_entity}\"[0/0->${csi_source_pad}/0[1]]"
+selected_lanes=""
+for active_parent_pad in $(active_parent_pads "$parent_entity"); do
+    append_lane "$(lane_from_parent_pad "$active_parent_pad")"
+done
+append_lane "$lane"
 
-run media-ctl -d /dev/media0 -V "\"${sensor_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
-run media-ctl -d /dev/media0 -V "\"${remote_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
-run media-ctl -d /dev/media0 -V "\"${remote_entity}\":2/0 [fmt:UYVY8_1X16/1920x1536]"
-run media-ctl -d /dev/media0 -V "\"${parent_entity}\":${parent_sink_pad}/0 [fmt:UYVY8_1X16/1920x1536]"
-run media-ctl -d /dev/media0 -V "\"${parent_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
-run media-ctl -d /dev/media0 -V "\"${csi_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
-run media-ctl -d /dev/media0 -V "\"${csi_entity}\":${csi_source_pad}/0 [fmt:UYVY8_1X16/1920x1536]"
+parent_routes=""
+csi_routes=""
+stream_id=0
+for configured_lane in a b c d; do
+    lane_selected=0
+    for selected_lane in $selected_lanes; do
+        if [ "$selected_lane" = "$configured_lane" ]; then
+            lane_selected=1
+            break
+        fi
+    done
 
-run media-ctl -d /dev/media0 -l "\"${csi_entity}\":${csi_source_pad} -> \"${capture_entity}\":0[1]"
+    if [ "$lane_selected" -ne 1 ]; then
+        continue
+    fi
+
+    configured_sensor_entity="isx031f ${configured_lane}-${port}"
+    configured_remote_entity="max9x ${configured_lane}-${port}"
+    configured_parent_sink_pad="$(lane_parent_sink_pad "$configured_lane")"
+    configured_csi_source_pad="$(lane_csi_source_pad "$configured_lane")"
+    configured_capture_index="$(lane_capture_index "$configured_lane" "$port")"
+    configured_capture_entity="Intel IPU7 ISYS Capture ${configured_capture_index}"
+
+    if [ -n "$parent_routes" ]; then
+        parent_routes="${parent_routes},"
+        csi_routes="${csi_routes},"
+    fi
+    parent_routes="${parent_routes}${configured_parent_sink_pad}/${stream_id}->0/${stream_id}[1]"
+    csi_routes="${csi_routes}0/${stream_id}->${configured_csi_source_pad}/${stream_id}[1]"
+
+    stream_id=$((stream_id + 1))
+done
+
+run media-ctl -d /dev/media0 -R "\"${parent_entity}\"[${parent_routes}]"
+run media-ctl -d /dev/media0 -R "\"${csi_entity}\"[${csi_routes}]"
+
+stream_id=0
+for configured_lane in a b c d; do
+    lane_selected=0
+    for selected_lane in $selected_lanes; do
+        if [ "$selected_lane" = "$configured_lane" ]; then
+            lane_selected=1
+            break
+        fi
+    done
+
+    if [ "$lane_selected" -ne 1 ]; then
+        continue
+    fi
+
+    configured_sensor_entity="isx031f ${configured_lane}-${port}"
+    configured_remote_entity="max9x ${configured_lane}-${port}"
+    configured_parent_sink_pad="$(lane_parent_sink_pad "$configured_lane")"
+    configured_csi_source_pad="$(lane_csi_source_pad "$configured_lane")"
+    configured_capture_index="$(lane_capture_index "$configured_lane" "$port")"
+    configured_capture_entity="Intel IPU7 ISYS Capture ${configured_capture_index}"
+
+    run media-ctl -d /dev/media0 -R "\"${configured_remote_entity}\"[0/0->2/${stream_id}[1]]"
+
+    run media-ctl -d /dev/media0 -V "\"${configured_sensor_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
+    run media-ctl -d /dev/media0 -V "\"${configured_remote_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
+    run media-ctl -d /dev/media0 -V "\"${configured_remote_entity}\":2/${stream_id} [fmt:UYVY8_1X16/1920x1536]"
+    run media-ctl -d /dev/media0 -V "\"${parent_entity}\":${configured_parent_sink_pad}/${stream_id} [fmt:UYVY8_1X16/1920x1536]"
+    run media-ctl -d /dev/media0 -V "\"${parent_entity}\":0/${stream_id} [fmt:UYVY8_1X16/1920x1536]"
+    run media-ctl -d /dev/media0 -V "\"${csi_entity}\":0/${stream_id} [fmt:UYVY8_1X16/1920x1536]"
+    run media-ctl -d /dev/media0 -V "\"${csi_entity}\":${configured_csi_source_pad}/${stream_id} [fmt:UYVY8_1X16/1920x1536]"
+
+    run media-ctl -d /dev/media0 -l "\"${csi_entity}\":${configured_csi_source_pad} -> \"${configured_capture_entity}\":0[1]"
+
+    stream_id=$((stream_id + 1))
+done
+
 run v4l2-ctl -d "$video_node" --set-fmt-video=width=1920,height=1536,pixelformat=UYVY
 run sudo ln -sfn "$video_node" "$video_alias"
