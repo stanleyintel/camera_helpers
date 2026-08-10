@@ -1,0 +1,7 @@
+#!/bin/sh
+
+f=`mktemp -u`
+media-ctl --print-dot > $f.dot
+dot -Tpng $f.dot > $f.png
+
+ls -l $f.png
