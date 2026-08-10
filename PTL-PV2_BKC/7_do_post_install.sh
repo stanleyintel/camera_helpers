@@ -26,7 +26,8 @@ run /bin/rm -rf $HOME/.cache/gstreamer-1.0
 
 # dkms is to build dkms drivers
 # meson and ninja-build are to build v4l-utils
-run sudo -E apt install -y dkms yavta meson ninja-build
+# graphviz are for "dot" (used by converting the output of media-ctl)
+run sudo -E apt install -y dkms yavta meson ninja-build graphviz
 
 run sudo chmod o+rx /usr/lib/libcamhal
 run sudo chmod o+rx /usr/lib/libcamhal/plugins/
