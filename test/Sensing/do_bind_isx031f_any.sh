@@ -125,4 +125,4 @@ run media-ctl -d /dev/media0 -V "\"${csi_entity}\":${csi_source_pad}/0 [fmt:UYVY
 
 run media-ctl -d /dev/media0 -l "\"${csi_entity}\":${csi_source_pad} -> \"${capture_entity}\":0[1]"
 
-run v4l2-ctl -d "$video_alias" --set-fmt-video=width=1920,height=1536,pixelformat=UYVY
+run v4l2-ctl -d "$video_node" --set-fmt-video=width=1920,height=1536,pixelformat=UYVY
