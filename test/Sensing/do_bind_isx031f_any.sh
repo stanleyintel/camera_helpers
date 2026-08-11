@@ -1,152 +1,128 @@
-#!/bin/bash
+#!/bin/sh
 
-set -euo pipefail
+set -eu
 
 dry_run=0
-if [[ "${1:-}" == "--dry" ]]; then
+if [ "${1:-}" = "--dry" ]; then
     dry_run=1
     shift
 fi
 
-if [[ $# -ne 0 ]]; then
-    echo "Usage: $0 [--dry]" >&2
-    exit 1
-fi
-
-if (( dry_run == 0 )); then
+if [ "$dry_run" -eq 0 ]; then
     set -x
 fi
 
-mdev="$(v4l2-ctl --list-devices | awk '
-    /^ipu7/ { in_ipu=1; next }
-    in_ipu && /\/dev\/media/ {
-        gsub(/^[[:space:]]+/, "", $0)
-        print
-        exit
-    }
-')"
+v4l2_version_line="$(v4l2-ctl --version | sed -n '1p')"
+v4l2_version="$(echo "$v4l2_version_line" | sed -n 's/^v4l2-ctl \([0-9][0-9.]*\).*/\1/p')"
+v4l2_major="$(echo "$v4l2_version" | cut -d. -f1)"
+v4l2_minor="$(echo "$v4l2_version" | cut -d. -f2)"
 
-if [[ -z "$mdev" ]]; then
-    echo "No IPU7 media device found." >&2
+if [ -z "$v4l2_version" ] || [ -z "$v4l2_major" ] || [ -z "$v4l2_minor" ]; then
+    echo "Failed to parse 'v4l2-ctl --version'. Please upgrade v4l-utils." >&2
     exit 1
 fi
 
-capdev_count="$(v4l2-ctl -d "$mdev" -A | wc -l)"
-if (( capdev_count - 2 > 48 )); then
-    capture_stride=16
-else
-    capture_stride=8
+if [ "$v4l2_major" -lt 1 ] || { [ "$v4l2_major" -eq 1 ] && [ "$v4l2_minor" -lt 32 ]; }; then
+    echo "v4l2-ctl version ${v4l2_version} is too old. Please upgrade v4l-utils to 1.32 or newer." >&2
+    exit 1
 fi
 
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 [--dry] <a|b|c|d> <0|2>" >&2
+    exit 1
+fi
+
+lane="$1"
+port="$2"
+
+case "$lane" in
+    a)
+        parent_sink_pad=4
+        csi_source_pad=1
+        capture_index_0=0
+        capture_index_2=16
+        ;;
+    b)
+        parent_sink_pad=5
+        csi_source_pad=2
+        capture_index_0=1
+        capture_index_2=17
+        ;;
+    c)
+        parent_sink_pad=6
+        csi_source_pad=3
+        capture_index_0=2
+        capture_index_2=18
+        ;;
+    d)
+        parent_sink_pad=7
+        csi_source_pad=4
+        capture_index_0=3
+        capture_index_2=19
+        ;;
+    *)
+        echo "Invalid lane: $lane" >&2
+        echo "Usage: $0 [--dry] <a|b|c|d> <0|2>" >&2
+        exit 1
+        ;;
+esac
+
+case "$port" in
+    0)
+        sensor_entity="isx031f ${lane}-0"
+        remote_entity="max9x ${lane}-0"
+        parent_entity="max9x a"
+        csi_entity="Intel IPU7 CSI2 0"
+        capture_index="$capture_index_0"
+        ;;
+    2)
+        sensor_entity="isx031f ${lane}-2"
+        remote_entity="max9x ${lane}-2"
+        parent_entity="max9x c"
+        csi_entity="Intel IPU7 CSI2 2"
+        capture_index="$capture_index_2"
+        ;;
+    *)
+        echo "Invalid port: $port" >&2
+        echo "Usage: $0 [--dry] <a|b|c|d> <0|2>" >&2
+        exit 1
+        ;;
+esac
+
+capture_entity="Intel IPU7 ISYS Capture ${capture_index}"
+video_node="/dev/video${capture_index}"
+video_alias="/dev/video-isx031f-${lane}-${port}"
+
+# Mapping derived from:
+#   config/ipu75xa/sensors/isx031f-{1..8}.json
+# where:
+#   a/b/c/d on port 0 -> isx031f-{1,2,3,4}
+#   a/b/c/d on port 2 -> isx031f-{5,6,7,8}
+#
+# This script only programs the selected path:
+#   isx031f <lane>-<port> -> max9x <lane>-<port> -> max9x <a|c>
+#   -> Intel IPU7 CSI2 <0|2> -> Intel IPU7 ISYS Capture <N>
+
 run() {
-    if (( dry_run )); then
-        printf '%q' "$1"
-        shift
-        for arg in "$@"; do
-            printf ' %q' "$arg"
-        done
-        printf '\n'
+    if [ "$dry_run" -eq 1 ]; then
+        printf '%s\n' "$*"
     else
         "$@"
     fi
 }
 
-des_node() {
-    case "$1" in
-        0) echo "max9x a" ;;
-        1) echo "max9x b" ;;
-        2) echo "max9x c" ;;
-        3) echo "max9x d" ;;
-        4) echo "max9x e" ;;
-        5) echo "max9x f" ;;
-        *)
-            echo "Unsupported port: $1" >&2
-            exit 1
-            ;;
-    esac
-}
+run media-ctl -d /dev/media0 -R "\"${remote_entity}\"[0/0->2/0[1]]"
+run media-ctl -d /dev/media0 -R "\"${parent_entity}\"[${parent_sink_pad}/0->0/0[1]]"
+run media-ctl -d /dev/media0 -R "\"${csi_entity}\"[0/0->${csi_source_pad}/0[1]]"
 
-fmt='[fmt:UYVY8_1X16/1920x1536]'
-declare -A lane_index=([a]=0 [b]=1 [c]=2 [d]=3)
+run media-ctl -d /dev/media0 -V "\"${sensor_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
+run media-ctl -d /dev/media0 -V "\"${remote_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
+run media-ctl -d /dev/media0 -V "\"${remote_entity}\":2/0 [fmt:UYVY8_1X16/1920x1536]"
+run media-ctl -d /dev/media0 -V "\"${parent_entity}\":${parent_sink_pad}/0 [fmt:UYVY8_1X16/1920x1536]"
+run media-ctl -d /dev/media0 -V "\"${parent_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
+run media-ctl -d /dev/media0 -V "\"${csi_entity}\":0/0 [fmt:UYVY8_1X16/1920x1536]"
+run media-ctl -d /dev/media0 -V "\"${csi_entity}\":${csi_source_pad}/0 [fmt:UYVY8_1X16/1920x1536]"
 
-mapfile -t cameras < <(
-    media-ctl -d "$mdev" -p |
-    sed -n 's/.*: isx031f \([a-d]-[0-9]\+\) (.*/\1/p' |
-    sort -u -t- -k2,2n -k1,1
-)
+run media-ctl -d /dev/media0 -l "\"${csi_entity}\":${csi_source_pad} -> \"${capture_entity}\":0[1]"
 
-if (( ${#cameras[@]} == 0 )); then
-    echo "No isx031f cameras found on ${mdev}." >&2
-    exit 1
-fi
-
-declare -A stream_count
-declare -A des_routes
-declare -A csi_routes
-declare -A camera_stream
-ports=()
-
-for camera in "${cameras[@]}"; do
-    lane="${camera%%-*}"
-    port="${camera##*-}"
-    index="${lane_index[$lane]}"
-    stream="${stream_count[$port]:-0}"
-
-    if [[ -z "${stream_count[$port]+x}" ]]; then
-        ports+=("$port")
-    fi
-
-    if [[ -n "${des_routes[$port]:-}" ]]; then
-        des_routes[$port]+=","
-        csi_routes[$port]+=","
-    fi
-
-    des_routes[$port]+="$((index + 4))/${stream}->0/${stream}[1]"
-    csi_routes[$port]+="0/${stream}->$((index + 1))/${stream}[1]"
-    camera_stream[$camera]="$stream"
-    stream_count[$port]=$((stream + 1))
-done
-
-for camera in "${cameras[@]}"; do
-    lane="${camera%%-*}"
-    port="${camera##*-}"
-    index="${lane_index[$lane]}"
-    capture_index=$((port * capture_stride + index))
-
-    run media-ctl -d "$mdev" -l "\"$(des_node "$port")\":0 -> \"Intel IPU7 CSI2 ${port}\":0[1]"
-    run media-ctl -d "$mdev" -l "\"Intel IPU7 CSI2 ${port}\":$((index + 1)) -> \"Intel IPU7 ISYS Capture ${capture_index}\":0[1]"
-done
-
-for port in "${ports[@]}"; do
-    run media-ctl -d "$mdev" -R "\"$(des_node "$port")\"[${des_routes[$port]}]"
-    run media-ctl -d "$mdev" -R "\"Intel IPU7 CSI2 ${port}\"[${csi_routes[$port]}]"
-done
-
-for camera in "${cameras[@]}"; do
-    lane="${camera%%-*}"
-    port="${camera##*-}"
-    index="${lane_index[$lane]}"
-    stream="${camera_stream[$camera]}"
-    capture_index=$((port * capture_stride + index))
-    video_node="/dev/video${capture_index}"
-    alias_node="/dev/video-isx031f-${camera}"
-
-    run media-ctl -d "$mdev" -R "\"max9x ${camera}\"[0/0->2/${stream}[1]]"
-    run media-ctl -d "$mdev" -V "\"isx031f ${camera}\":0/0 ${fmt}"
-    run media-ctl -d "$mdev" -V "\"max9x ${camera}\":0/0 ${fmt}"
-    run media-ctl -d "$mdev" -V "\"max9x ${camera}\":2/${stream} ${fmt}"
-    run media-ctl -d "$mdev" -V "\"$(des_node "$port")\":$((index + 4))/${stream} ${fmt}"
-    run media-ctl -d "$mdev" -V "\"$(des_node "$port")\":0/${stream} ${fmt}"
-    run media-ctl -d "$mdev" -V "\"Intel IPU7 CSI2 ${port}\":0/${stream} ${fmt}"
-    run media-ctl -d "$mdev" -V "\"Intel IPU7 CSI2 ${port}\":$((index + 1))/${stream} ${fmt}"
-    run v4l2-ctl -d "$video_node" --set-fmt-video=width=1920,height=1536,pixelformat=UYVY
-    run sudo ln -sfn "$video_node" "$alias_node"
-done
-
-for port in "${ports[@]}"; do
-    if (( stream_count[$port] > 1 )); then
-        for ((stream = 0; stream < stream_count[$port]; stream++)); do
-            run media-ctl -d "$mdev" -V "\"Intel IPU7 CSI2 ${port}\":0/${stream} ${fmt}"
-        done
-    fi
-done
+run v4l2-ctl -d "$video_alias" --set-fmt-video=width=1920,height=1536,pixelformat=UYVY
