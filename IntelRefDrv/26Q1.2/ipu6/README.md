@@ -8,10 +8,7 @@ This flow targets **ARL + IPU6** with the 26Q1.2 userspace and DKMS driver stack
 
 1. Ubuntu is already installed.
 2. An **ARL BKC kernel** is already installed and booted.
-3. BIOS is configured for **ISX031 over MAX9295/MAX9296**.
-
-Reference BIOS settings:  
-https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/blob/release/26Q1.2/doc/isx031/userspace-gmsl.md#mipi-camera-configuration-for-ipu6epmtl
+3. BIOS is configured. Reference BIOS settings can be found under: https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/tree/release/26Q1.2/doc
 
 For D3 Embedded ISX031, set **Custom HID** to `INTC031M`.
 
@@ -39,25 +36,32 @@ All scripts support `--dry` to print commands without executing them.
    git clone https://github.com/stanleyintel/camera_helpers.git
    ```
 
-2. Enter this directory:
+2. If DEB packages from **RDC 831484 ARL-UH_IPU_FW_HDMI_In** were installed before, uninstall them first:
+
+   ```bash
+   cd camera_helpers
+   ./tools/do_uninstall_bkc_deb
+   ```
+
+3. Enter this directory:
 
    ```bash
    cd camera_helpers/IntelRefDrv/26Q1.2/ipu6
    ```
 
-3. Clone the required sources:
+4. Clone the required sources:
 
    ```bash
    ./1_do_clone_sources.sh
    ```
 
-4. Install camera bins:
+5. Install camera bins:
 
    ```bash
    ./2_do_install_camera_bins.sh
    ```
 
-5. Build and install the camera HAL for ARL:
+6. Build and install the camera HAL for ARL:
 
    ```bash
    ./3_do_build_camera_hal.sh
@@ -71,43 +75,43 @@ All scripts support `--dry` to print commands without executing them.
    ./3_do_build_camera_hal.sh ipu_mtl
    ```
 
-6. Build and install `icamerasrc`:
+7. Build and install `icamerasrc`:
 
    ```bash
    ./4_do_build_icamerasrc.sh
    ```
 
-7. Clone and patch the DKMS driver:
+8. Clone and patch the DKMS driver:
 
    ```bash
    ./5_do_clone_dkms_driver.sh
    ```
 
-8. Build and install the DKMS driver:
+9. Build and install the DKMS driver:
 
    ```bash
    ./6_do_build_dkms.sh
    ```
 
-9. Run post-install setup:
+10. Run post-install setup:
 
    ```bash
    ./7_do_post_install.sh
    ```
 
-10. Build `v4l-utils` if needed:
+11. Build `v4l-utils` if needed:
 
    ```bash
    ./8_do_post_build_v4l.sh
    ```
 
-11. Reboot manually:
+12. Reboot manually:
 
    ```bash
    sudo reboot
    ```
 
-12. After reboot, return to the same directory and run the validation script:
+13. After reboot, return to the same directory and run the validation script:
 
    ```bash
    cd camera_helpers/IntelRefDrv/26Q1.2/ipu6
