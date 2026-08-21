@@ -10,7 +10,6 @@ This flow targets **ARL + IPU6** with the 26Q1.2 userspace and DKMS driver stack
 2. An **ARL BKC kernel** is already installed and booted.
 3. BIOS is configured. Reference BIOS settings can be found under: https://github.com/intel/Intel-MIPI-CSI-Camera-Reference-Driver/tree/release/26Q1.2/doc
 
-For D3 Embedded ISX031, set **Custom HID** to `INTC031M`.
 
 ## Files in This Directory
 
