@@ -1,0 +1,48 @@
+From 70f015624a1439adb57c13c656386cedf02f0896 Mon Sep 17 00:00:00 2001
+From: Khai Wen, Ng <khai.wen.ng@intel.com>
+Date: Tue, 26 May 2026 15:54:40 +0000
+Subject: [PATCH] dkms: perform integrity check for tarball before downloading
+
+Reuse tarball if tarball matches the server.
+---
+ dkms-kernel-source.sh | 24 +++++++++++++++++++++++-
+ 1 file changed, 23 insertions(+), 1 deletion(-)
+
+diff --git a/dkms-kernel-source.sh b/dkms-kernel-source.sh
+index 0673772..0aa89f6 100755
+--- a/dkms-kernel-source.sh
++++ b/dkms-kernel-source.sh
+@@ -18,7 +18,29 @@ if (( patch != 0 )); then
+ else
+   kernelprefix="linux-$major.$minor"
+ fi
+-wget --no-check-certificate https://mirrors.edge.kernel.org/pub/linux/kernel/v$major.x/$kernelprefix.tar.xz -O $kernelprefix.tar.xz
++
++tarball="${kernelprefix}.tar.xz"
++url="https://mirrors.edge.kernel.org/pub/linux/kernel/v${major}.x/${tarball}"
++
++need_dl=1
++if [[ -s "$tarball" ]] && xz -t "$tarball" 2>/dev/null; then
++    local_size=$(stat -c %s "$tarball")
++    remote_size=$(curl -fsSLI "$url" 2>/dev/null \
++        | awk 'BEGIN{IGNORECASE=1} /^content-length:/ {gsub("\r",""); print $2}' \
++        | tail -1)
++    if [[ -n "$remote_size" && "$local_size" == "$remote_size" ]]; then
++        echo "dkms-kernel-source.sh: reusing cached ${tarball} (${local_size} bytes)"
++        need_dl=0
++    fi
++fi
++
++if (( need_dl )); then
++    echo "Downloading $url"
++    wget --no-check-certificate -q --show-progress -N "$url" -O "$tarball" || {
++        echo "dkms-kernel-source.sh: failed to download ${url}" >&2
++        return 1
++    }
++fi
+ 
+ for arg in "$@"; do
+     echo "Extracting: $kernelprefix/$arg"
+-- 
+2.34.1
+
