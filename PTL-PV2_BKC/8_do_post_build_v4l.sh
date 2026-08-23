@@ -7,6 +7,12 @@ get_media_ctl_version() {
   media-ctl --version 2>/dev/null | awk '/^media-ctl / {print $2; exit}'
 }
 
+version_ge() {
+  local actual="$1"
+  local minimum="$2"
+  [[ "$(printf '%s\n%s\n' "$minimum" "$actual" | sort -V | head -n1)" == "$minimum" ]]
+}
+
 has_apt_v4l_utils() {
   dpkg-query -W -f='${Status}\n' v4l-utils 2>/dev/null | grep -Fxq 'install ok installed'
 }
@@ -19,7 +25,7 @@ if command -v media-ctl >/dev/null 2>&1; then
     exit 1
   fi
 
-  if dpkg --compare-versions "$CURRENT_VERSION" ge "$MIN_VERSION"; then
+  if version_ge "$CURRENT_VERSION" "$MIN_VERSION"; then
     echo "Current v4l-utils version is good: $CURRENT_VERSION"
     exit 0
   fi
@@ -69,7 +75,7 @@ if [ -z "$INSTALLED_VERSION" ]; then
   exit 1
 fi
 
-if dpkg --compare-versions "$INSTALLED_VERSION" ge "$MIN_VERSION"; then
+if version_ge "$INSTALLED_VERSION" "$MIN_VERSION"; then
   echo "Installed v4l-utils version is good: $INSTALLED_VERSION"
 else
   echo "ERROR: Installed v4l-utils version is still too old: $INSTALLED_VERSION"
