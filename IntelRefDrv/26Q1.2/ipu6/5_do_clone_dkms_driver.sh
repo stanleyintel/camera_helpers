@@ -79,3 +79,34 @@ apply_patch_if_needed() {
 for patch_src in "${PATCHES[@]}"; do
   apply_patch_if_needed "$patch_src"
 done
+
+KERNEL_RELEASE="$(uname -r)"
+KERNEL_VERSION="${KERNEL_RELEASE%%-*}"
+KERNEL_BUILD_DIR="/lib/modules/$KERNEL_RELEASE/build"
+KERNEL_CONFIG="$KERNEL_BUILD_DIR/.config"
+FALLBACK_CONFIG="$SCRIPT_DIR/.config_6.12.48"
+
+if [[ -f "$KERNEL_CONFIG" ]]; then
+  echo "kernel config already exists: $KERNEL_CONFIG"
+  exit 0
+fi
+
+if [[ "$KERNEL_VERSION" != "6.12.48" ]]; then
+  echo "WARNING: missing kernel config: $KERNEL_CONFIG" >&2
+  echo "DKMS build needs the active kernel .config." >&2
+  echo "Please copy the .config from your kernel source tree into $KERNEL_CONFIG and rerun the DKMS build step." >&2
+  exit 0
+fi
+
+if [[ ! -e "$KERNEL_BUILD_DIR" ]]; then
+  echo "ERROR: missing kernel build directory: $KERNEL_BUILD_DIR" >&2
+  exit 1
+fi
+
+if [[ ! -f "$FALLBACK_CONFIG" ]]; then
+  echo "ERROR: fallback config not found: $FALLBACK_CONFIG" >&2
+  exit 1
+fi
+
+run sudo -E cp -f "$FALLBACK_CONFIG" "$KERNEL_CONFIG"
+echo "copied fallback kernel config to: $KERNEL_CONFIG"
