@@ -56,6 +56,15 @@ for pattern in "$REPO_DIR"/lib/pkgconfig/* "$REPO_DIR"/lib/*/pkgconfig/*; do
   done
 done
 
+shared_libs=()
+for pattern in "$REPO_DIR"/lib/lib*.so.* "$REPO_DIR"/lib/*/lib*.so.*; do
+  for path in $pattern; do
+    [[ -e "$path" ]] || continue
+    [[ "$path" == */pkgconfig/* || "$path" == */firmware/* ]] && continue
+    shared_libs+=("$path")
+  done
+done
+
 if ((${#runtime_libs[@]} == 0 || ${#firmware_bins[@]} == 0 || ${#pkgconfigs[@]} == 0)); then
   echo "ipu6-camera-bins layout does not match the expected 26Q1.2 release structure." >&2
   exit 1
@@ -68,3 +77,8 @@ run sudo cp -P "${runtime_libs[@]}" /usr/lib/
 run sudo mkdir -p /usr/include /usr/lib/pkgconfig
 run sudo cp -r "$REPO_DIR"/include/* /usr/include/
 run sudo cp -r "${pkgconfigs[@]}" /usr/lib/pkgconfig/
+
+for lib in "${shared_libs[@]}"; do
+  lib="${lib##*/}"
+  run sudo ln -sf "$lib" "/usr/lib/${lib%.*}"
+done
