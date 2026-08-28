@@ -42,6 +42,7 @@ run sudo -E apt install -y yavta meson ninja-build graphviz
 run sudo chmod o+rx /usr/lib/libcamhal
 run sudo chmod o+rx /usr/lib/libcamhal/plugins/
 chmod_other_rx_glob /usr/lib/libgsticamerainterface-1.0.so*
+chmod_other_rx_glob /usr/lib/libgsticamerainterface-1.0.so.*
 chmod_other_rx_glob /usr/lib/gstreamer-1.0/libgsticamerasrc.so*
 run sudo chmod -R o+rx /etc/camera/
 
