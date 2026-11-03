@@ -3,5 +3,6 @@
 f=`mktemp -u`
 media-ctl --print-dot > $f.dot
 dot -Tpng $f.dot > $f.png
+dot -Tpng $f.dot > $f.svg
 
 ls -l $f.png

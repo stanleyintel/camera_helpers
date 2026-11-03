@@ -22,7 +22,7 @@ run() {
   fi
 }
 
-PACKAGE_PATTERN='icamerasrc|ipu6|ipu7xfw|libiaaiq|libiacss|ipu75xafw|libcamhal'
+PACKAGE_PATTERN='(^|-)icamera(s|src)?$|(^|-)ipu(6|7)(xfw)?|ipu75xa|libia-|libcamhal|libgsticamerainterface'
 
 if $DRY_RUN; then
   echo "+ dpkg-query -W -f='\${Package}\\n' | grep -E '$PACKAGE_PATTERN' | sort -u"
