@@ -16,7 +16,7 @@ Scope (\_SB.PC00.IPU0)
         ToUUID("dbb8e3e6-5886-4ba6-8795-1319f52a966b"), // Hierarchical Data Extension
         Package () {
             /*
-             * mipi-img-port are MIPI ports, that can be connected to Camera (Deserializer or MIPI direct Camera) 
+             * mipi-img-port are MIPI ports, that can be connected to Camera (Deserializer or MIPI direct Camera)
              * mipi-disco-img.c will use these information to create fwnode.
              */
             Package () { "mipi-img-port-0", "PRT0" }, // MIPI Port 0 of SOC
@@ -27,21 +27,21 @@ Scope (\_SB.PC00.IPU0)
     Name (PRT0, Package()
     {
         ToUUID("daffd814-6eba-4d8c-8a91-bc9bbf4aa301"), // Device Properties
-        Package () { 
+        Package () {
             Package () { "mipi-img-data-lanes", Package () { 1, 2 } }
         },
     })
     Name (PRT1, Package()
     {
         ToUUID("daffd814-6eba-4d8c-8a91-bc9bbf4aa301"), // Device Properties
-        Package () { 
+        Package () {
             Package () { "mipi-img-data-lanes", Package () { 1, 2 } }
         },
     })
     Name (PRT2, Package()
     {
         ToUUID("daffd814-6eba-4d8c-8a91-bc9bbf4aa301"), // Device Properties
-        Package () { 
+        Package () {
             Package () { "mipi-img-data-lanes", Package () { 1, 2 } }
         },
     })

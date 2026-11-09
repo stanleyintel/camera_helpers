@@ -30,6 +30,7 @@ the media-ctl routing and the camera HAL JSON file.
 | `acpi/ipu7/_des_ch_common_isx031.asl`, `_ser_common_max9295.asl`, `_cam_common_isx031.asl` | Unchanged channel, serializer and camera templates. |
 | `script/acpi/mc-setup.sh` | media-ctl setup. It supports a DES with two outputs. |
 | `config/acpi/ipu75xa/sensors/acpi.json` | Camera HAL JSON. `acpi-3` and `acpi-4` use CSI2 1. |
+| `patch/0001-acpi-ipu7-route-one-MAX96724-to-CSI_A-and-CSI_B.patch` | All the changes above as one patch. Apply it with `git am` on commit `bc0fb0652fc0f32ed82be829729869a0c40523d2` of `https://github.com/Pirouf/Intel-mipi-gmsl-modules.git`. |
 
 ## 3. Changes from the standard configuration
 
@@ -148,7 +149,19 @@ Run all commands from this folder.
 10. Stream the four cameras:
 
    ```
-   gst-launch-1.0 -e -v icamerasrc num-vc=4 scene-mode=auto device-name=acpi-1 io-mode=dma_mode printfps=true '!' 'video/x-raw(memory:DMABuf),drm-format=UYVY,width=1920,height=1536' '!' fpsdisplaysink video-sink=glimagesink sync=false icamerasrc num-vc=4 scene-mode=auto device-name=acpi-2 io-mode=dma_mode printfps=true '!' 'video/x-raw(memory:DMABuf),drm-format=UYVY,width=1920,height=1536' '!' fpsdisplaysink video-sink=glimagesink sync=false icamerasrc num-vc=4 scene-mode=auto device-name=acpi-3 io-mode=dma_mode printfps=true '!' 'video/x-raw(memory:DMABuf),drm-format=UYVY,width=1920,height=1536' '!' fpsdisplaysink video-sink=glimagesink sync=false icamerasrc num-vc=4 scene-mode=auto device-name=acpi-4 io-mode=dma_mode printfps=true '!' 'video/x-raw(memory:DMABuf),drm-format=UYVY,width=1920,height=1536' '!' fpsdisplaysink video-sink=glimagesink sync=false
+   gst-launch-1.0 -e -v \
+     icamerasrc num-vc=4 scene-mode=auto device-name=acpi-1 io-mode=dma_mode printfps=true \
+       '!' 'video/x-raw(memory:DMABuf),drm-format=UYVY,width=1920,height=1536' \
+       '!' fpsdisplaysink video-sink=glimagesink sync=false \
+     icamerasrc num-vc=4 scene-mode=auto device-name=acpi-2 io-mode=dma_mode printfps=true \
+       '!' 'video/x-raw(memory:DMABuf),drm-format=UYVY,width=1920,height=1536' \
+       '!' fpsdisplaysink video-sink=glimagesink sync=false \
+     icamerasrc num-vc=4 scene-mode=auto device-name=acpi-3 io-mode=dma_mode printfps=true \
+       '!' 'video/x-raw(memory:DMABuf),drm-format=UYVY,width=1920,height=1536' \
+       '!' fpsdisplaysink video-sink=glimagesink sync=false \
+     icamerasrc num-vc=4 scene-mode=auto device-name=acpi-4 io-mode=dma_mode printfps=true \
+       '!' 'video/x-raw(memory:DMABuf),drm-format=UYVY,width=1920,height=1536' \
+       '!' fpsdisplaysink video-sink=glimagesink sync=false
    ```
 
 ## 6. Verification
@@ -193,7 +206,7 @@ Do these checks while the cameras stream.
 If all four links go to pad 6 (PHY2), the system uses an `mc-setup.sh` that
 does not support two outputs. Do step 5 of the procedure again.
 
-## 8. Tested environment
+## 7. Tested environment
 
 | Item | Version |
 |------|---------|

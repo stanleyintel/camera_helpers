@@ -1,0 +1,576 @@
+From 524f4c5f2bb8599a124543f9239cb564cbd4ddff Mon Sep 17 00:00:00 2001
+From: Stanley <stanley.chang@intel.com>
+Date: Mon, 9 Nov 2026 13:13:21 +0800
+Subject: [PATCH] acpi: ipu7: route one MAX96724 to CSI_A and CSI_B
+
+Let one MAX96724 deserializer output to two IPU CSI-2 ports.
+GMSL links A/B go to CSI_A (IPU port 0) and links C/D go to
+CSI_B (IPU port 1). No driver change is needed.
+
+- _des_common_max96724.asl: add an optional second CSI2Bus
+  resource, enabled when the board defines DES_INTERNAL_PHY_2
+  and DES_TO_MIPI_PORT_2.
+- _ipu_dual_csi_ab.asl: new IPU0 fragment with port 0 and
+  port 1 set to 2 data lanes each, so port 0 does not join
+  port 1.
+- max96724-servoss_d3_isx031.asl: DES0 uses PHY2 (port 6) to
+  CSI_A and PHY3 (port 7) to CSI_B, C-PHY 2 trios.
+- mc-setup.sh: support a DES with more than one output. Map
+  links to outputs (default: link * nout / max_links), with
+  DES_LINK_OUT="D:L:O ..." to override.
+- acpi.json (ipu75xa): acpi-3 and acpi-4 use Intel IPU7 CSI2 1
+  and ISYS Capture 10/11.
+
+Tested on PTL (IPU7.5) with 4x ISX031.
+
+Signed-off-by: Stanley <stanley.chang@intel.com>
+---
+ acpi/ipu7/_des_common_max96724.asl       |  17 +++
+ acpi/ipu7/_ipu_dual_csi_ab.asl           |  48 ++++++
+ acpi/ipu7/max96724-servoss_d3_isx031.asl |   8 +-
+ config/acpi/ipu75xa/sensors/acpi.json    |  24 +--
+ script/acpi/mc-setup.sh                  | 178 +++++++++++++++++------
+ 5 files changed, 215 insertions(+), 60 deletions(-)
+ create mode 100644 acpi/ipu7/_ipu_dual_csi_ab.asl
+
+diff --git a/acpi/ipu7/_des_common_max96724.asl b/acpi/ipu7/_des_common_max96724.asl
+index a5ae183..269c4c2 100644
+--- a/acpi/ipu7/_des_common_max96724.asl
++++ b/acpi/ipu7/_des_common_max96724.asl
+@@ -7,6 +7,8 @@
+  *   DES_INTERNAL_PHY       - DES internal PHY (e.g. PHY0 = 4, PHY1 = 5, PHY2 = 6, PHY3 = 7), used as DES Local port in CSI2Bus.
+  *   DES_LANES              - Number of MIPI data lanes (e.g. 2, 4), used in PRT4/5/6/7 connected to IPU
+  *   DES_TO_MIPI_PORT       - DES connected to MIPI Port (e.g. 0/1/2) of IPU0 Device, used as IPU remote port in CSI2Bus
++ *   DES_INTERNAL_PHY_2     - (Optional) second DES output PHY (4..7) for dual CSI output from one DES
++ *   DES_TO_MIPI_PORT_2     - (Required with DES_INTERNAL_PHY_2) IPU0 MIPI port of the second output
+  *   DES_I2C_ADDR           - DES I2C slave address (e.g. 0x0027 for MAX96724), used in I2cSerialBusV2
+  *   DES_I2C_BUS            - DES I2C bus path string (e.g. "\\_SB.PC00.I2C1"), used in I2cSerialBusV2
+  *   DES_PATH               - Path to DES itself (e.g. "\\_SB.PC00.DESx"), used in GpioIo
+@@ -59,6 +61,21 @@ Name (_CRS, ResourceTemplate () // _CRS: Current Resource Settings
+         ,                       // DescriptorName
+         )                       // VendorData
+ 
++#ifdef DES_INTERNAL_PHY_2
++    // Optional second DES output to a second IPU0 MIPI port (dual CSI from
++    // one DES). Which GMSL links go to which output is selected by the DES
++    // subdev routing (media-ctl -R), not by ASL.
++    CSI2Bus(
++        DeviceInitiated,        // SlaveMode
++        DES_PHY_TYPE,           // PhyType (same as the first output)
++        DES_INTERNAL_PHY_2,     // LocalPort (4/5/6/7, must differ from DES_INTERNAL_PHY)
++        "\\_SB.PC00.IPU0",      // ResourceSource
++        DES_TO_MIPI_PORT_2,     // ResourceSourceIndex (IPU0 PRTx of the second output)
++        ,                       // ResourceUsage
++        ,                       // DescriptorName
++        )                       // VendorData
++#endif
++
+     I2cSerialBusV2 (
+         DES_I2C_ADDR,           // SlaveAddress (e.g. 0x0027 based on Deserializer Hardware)
+         ControllerInitiated,    // SlaveMode
+diff --git a/acpi/ipu7/_ipu_dual_csi_ab.asl b/acpi/ipu7/_ipu_dual_csi_ab.asl
+new file mode 100644
+index 0000000..5a5b5a9
+--- /dev/null
++++ b/acpi/ipu7/_ipu_dual_csi_ab.asl
+@@ -0,0 +1,48 @@
++/*
++ * SPDX-License-Identifier: GPL-2.0
++ * Copyright (c) 2026 Intel Corporation.
++ *
++ * Variant of _ipu.asl for one DES driving both CSI_A and CSI_B: PRT0/PRT1
++ * are 2 lanes each. Port A with more than 2 lanes is aggregated with Port B,
++ * which makes an independent CSI_B stream impossible.
++ */
++
++External (_SB.PC00.IPU0, DeviceObj) // Reuse IPU0 Device from existing SSDT ACPI table
++
++Scope (\_SB.PC00.IPU0)
++{
++    Name (_DSD, Package () // _DSD: Device Specific Data
++    {
++        ToUUID("dbb8e3e6-5886-4ba6-8795-1319f52a966b"), // Hierarchical Data Extension
++        Package () {
++            /*
++             * mipi-img-port are MIPI ports, that can be connected to Camera (Deserializer or MIPI direct Camera)
++             * mipi-disco-img.c will use these information to create fwnode.
++             */
++            Package () { "mipi-img-port-0", "PRT0" }, // MIPI Port 0 of SOC
++            Package () { "mipi-img-port-1", "PRT1" }, // MIPI Port 1 of SOC
++            Package () { "mipi-img-port-2", "PRT2" }, // MIPI Port 2 of SOC
++        },
++    })
++    Name (PRT0, Package()
++    {
++        ToUUID("daffd814-6eba-4d8c-8a91-bc9bbf4aa301"), // Device Properties
++        Package () {
++            Package () { "mipi-img-data-lanes", Package () { 1, 2 } }
++        },
++    })
++    Name (PRT1, Package()
++    {
++        ToUUID("daffd814-6eba-4d8c-8a91-bc9bbf4aa301"), // Device Properties
++        Package () {
++            Package () { "mipi-img-data-lanes", Package () { 1, 2 } }
++        },
++    })
++    Name (PRT2, Package()
++    {
++        ToUUID("daffd814-6eba-4d8c-8a91-bc9bbf4aa301"), // Device Properties
++        Package () {
++            Package () { "mipi-img-data-lanes", Package () { 1, 2 } }
++        },
++    })
++}
+diff --git a/acpi/ipu7/max96724-servoss_d3_isx031.asl b/acpi/ipu7/max96724-servoss_d3_isx031.asl
+index 5375cbe..8776971 100644
+--- a/acpi/ipu7/max96724-servoss_d3_isx031.asl
++++ b/acpi/ipu7/max96724-servoss_d3_isx031.asl
+@@ -34,7 +34,8 @@ DefinitionBlock ("", "SSDT", 2, "", "IMG_IPU", 0x20260513)
+ {
+     External (_SB.PC00, DeviceObj) // Root device
+ 
+-    Include ("_ipu.asl")
++    // DES0 drives both CSI_A and CSI_B, so IPU0 PRT0/PRT1 must be 2 lanes each.
++    Include ("_ipu_dual_csi_ab.asl")
+ 
+     Scope (\_SB.PC00)
+     {
+@@ -51,6 +52,9 @@ DefinitionBlock ("", "SSDT", 2, "", "IMG_IPU", 0x20260513)
+             #define DES_LANES 2
+             #define DES_INTERNAL_PHY 6
+             #define DES_TO_MIPI_PORT 0
++            // Second output: PHY3 (Port F) -> CSI_B. Links 0/1 -> CSI_A, 2/3 -> CSI_B via media-ctl routes.
++            #define DES_INTERNAL_PHY_2 7
++            #define DES_TO_MIPI_PORT_2 1
+             #define DES_I2C_BUS "\\_SB.PC00.I2C1"
+             #define DES_PATH "\\_SB.PC00.DES0"
+             #define DES_REF \_SB.PC00.DES0
+@@ -163,6 +167,8 @@ DefinitionBlock ("", "SSDT", 2, "", "IMG_IPU", 0x20260513)
+             #undef DES_LANES
+             #undef DES_INTERNAL_PHY
+             #undef DES_TO_MIPI_PORT
++            #undef DES_INTERNAL_PHY_2
++            #undef DES_TO_MIPI_PORT_2
+             #undef DES_I2C_BUS
+             #undef DES_PATH
+             #undef DES_REF
+diff --git a/config/acpi/ipu75xa/sensors/acpi.json b/config/acpi/ipu75xa/sensors/acpi.json
+index b44c8ee..2c637ab 100644
+--- a/config/acpi/ipu75xa/sensors/acpi.json
++++ b/config/acpi/ipu75xa/sensors/acpi.json
+@@ -178,10 +178,10 @@
+             "format": "V4L2_PIX_FMT_UYVY",
+             "videonode": [
+               {
+-                "name": "Intel IPU7 ISYS Capture 2", "videoNodeType": "VIDEO_GENERIC"
++                "name": "Intel IPU7 ISYS Capture 10", "videoNodeType": "VIDEO_GENERIC"
+               },
+               {
+-                "name": "Intel IPU7 CSI2 0", "videoNodeType": "VIDEO_ISYS_RECEIVER"
++                "name": "Intel IPU7 CSI2 1", "videoNodeType": "VIDEO_ISYS_RECEIVER"
+               },
+               {
+                 "acpiName": "\\_SB_.PC00.DES0.CH02.SER2.CAM2", "videoNodeType": "VIDEO_PIXEL_ARRAY"
+@@ -195,10 +195,10 @@
+             "format": "V4L2_PIX_FMT_UYVY",
+             "videonode": [
+               {
+-                "name": "Intel IPU7 ISYS Capture 2", "videoNodeType": "VIDEO_GENERIC"
++                "name": "Intel IPU7 ISYS Capture 10", "videoNodeType": "VIDEO_GENERIC"
+               },
+               {
+-                "name": "Intel IPU7 CSI2 0", "videoNodeType": "VIDEO_ISYS_RECEIVER"
++                "name": "Intel IPU7 CSI2 1", "videoNodeType": "VIDEO_ISYS_RECEIVER"
+               },
+               {
+                 "acpiName": "\\_SB_.PC00.DES0.CH02.SER2.CAM2", "videoNodeType": "VIDEO_PIXEL_ARRAY"
+@@ -212,10 +212,10 @@
+             "format": "V4L2_PIX_FMT_UYVY",
+             "videonode": [
+               {
+-                "name": "Intel IPU7 ISYS Capture 2", "videoNodeType": "VIDEO_GENERIC"
++                "name": "Intel IPU7 ISYS Capture 10", "videoNodeType": "VIDEO_GENERIC"
+               },
+               {
+-                "name": "Intel IPU7 CSI2 0", "videoNodeType": "VIDEO_ISYS_RECEIVER"
++                "name": "Intel IPU7 CSI2 1", "videoNodeType": "VIDEO_ISYS_RECEIVER"
+               },
+               {
+                 "acpiName": "\\_SB_.PC00.DES0.CH02.SER2.CAM2", "videoNodeType": "VIDEO_PIXEL_ARRAY"
+@@ -253,10 +253,10 @@
+             "format": "V4L2_PIX_FMT_UYVY",
+             "videonode": [
+               {
+-                "name": "Intel IPU7 ISYS Capture 3", "videoNodeType": "VIDEO_GENERIC"
++                "name": "Intel IPU7 ISYS Capture 11", "videoNodeType": "VIDEO_GENERIC"
+               },
+               {
+-                "name": "Intel IPU7 CSI2 0", "videoNodeType": "VIDEO_ISYS_RECEIVER"
++                "name": "Intel IPU7 CSI2 1", "videoNodeType": "VIDEO_ISYS_RECEIVER"
+               },
+               {
+                 "acpiName": "\\_SB_.PC00.DES0.CH03.SER3.CAM3", "videoNodeType": "VIDEO_PIXEL_ARRAY"
+@@ -270,10 +270,10 @@
+             "format": "V4L2_PIX_FMT_UYVY",
+             "videonode": [
+               {
+-                "name": "Intel IPU7 ISYS Capture 3", "videoNodeType": "VIDEO_GENERIC"
++                "name": "Intel IPU7 ISYS Capture 11", "videoNodeType": "VIDEO_GENERIC"
+               },
+               {
+-                "name": "Intel IPU7 CSI2 0", "videoNodeType": "VIDEO_ISYS_RECEIVER"
++                "name": "Intel IPU7 CSI2 1", "videoNodeType": "VIDEO_ISYS_RECEIVER"
+               },
+               {
+                 "acpiName": "\\_SB_.PC00.DES0.CH03.SER3.CAM3", "videoNodeType": "VIDEO_PIXEL_ARRAY"
+@@ -287,10 +287,10 @@
+             "format": "V4L2_PIX_FMT_UYVY",
+             "videonode": [
+               {
+-                "name": "Intel IPU7 ISYS Capture 3", "videoNodeType": "VIDEO_GENERIC"
++                "name": "Intel IPU7 ISYS Capture 11", "videoNodeType": "VIDEO_GENERIC"
+               },
+               {
+-                "name": "Intel IPU7 CSI2 0", "videoNodeType": "VIDEO_ISYS_RECEIVER"
++                "name": "Intel IPU7 CSI2 1", "videoNodeType": "VIDEO_ISYS_RECEIVER"
+               },
+               {
+                 "acpiName": "\\_SB_.PC00.DES0.CH03.SER3.CAM3", "videoNodeType": "VIDEO_PIXEL_ARRAY"
+diff --git a/script/acpi/mc-setup.sh b/script/acpi/mc-setup.sh
+index 0cbf364..703949d 100755
+--- a/script/acpi/mc-setup.sh
++++ b/script/acpi/mc-setup.sh
+@@ -63,6 +63,14 @@
+ # IPU7 CSI2 RX source-pad cap:
+ #   IPU_CSI2_SRC_PADS        Default: 16 (use 8 without the D4XX IPU7 patch).
+ #
++# Dual-output deserializer (one DES with two CSI2Bus source ports, e.g. MAX96724
++# PHY0 -> IPU CSI2 0 and PHY2 -> IPU CSI2 1). Outputs are numbered per DES in
++# ascending DES source-pad order (out 0 = lowest pad). By default links are
++# split evenly: link l -> out (l * num_outputs / DES_MAX_LINKS), i.e. links
++# 0,1 -> out 0 and links 2,3 -> out 1 for a 4-link DES with two outputs.
++#   DES_LINK_OUT="D:L:O ..." Override output O for link L of DES D
++#                            (e.g. DES_LINK_OUT="0:1:1 0:2:0").
++#
+ # ZED X (AR0234 behind a multi-PHY serializer):
+ #   ZEDX_FRAME_SYNC          Written to /sys/module/ar0234/parameters/frame_sync
+ #                            when a ZED X camera is configured. Default: 1.
+@@ -375,6 +383,10 @@ find_all_deserializers() {
+ # Per-DES arrays (indexed by deserializer index 'd', 0..N-1):
+ declare -a DES_PATH=() DES_BA=() DES_PREFIX_NAME=() DES_SRC_PAD=()
+ declare -a IPU_CSI2_ENTITY=() IPU_BASE=() CAPTURE_BASE=()
++# Per-DES outputs (DES source pad -> IPU CSI2). Keys are "<d>_<o>".
++# DES_SRC_PAD/IPU_CSI2_ENTITY/IPU_BASE/CAPTURE_BASE[d] mirror output 0.
++declare -a DES_NOUT=()
++declare -A OUT_SRC_PAD=() OUT_CSI2=() OUT_IPU_BASE=() OUT_CAPBASE=()
+ NUM_DES=0
+ 
+ # get IPU CSI2 ISYS Capture  /dev/video initial offset
+@@ -647,22 +659,23 @@ setup_mipi_cameras() {
+     done
+ }
+ 
+-# For each DES, locate the "Intel IPUx CSI2 N" entity wired to its source
+-# pad, the DES source pad number itself (which mirrors DES_CSI_LOCAL_PORT in
+-# the SSDT CSI2Bus resource), and the absolute capture-node base (lowest
+-# "ISYS Capture <N>" index linked to that CSI2). The DES->CSI2 link is
+-# IMMUTABLE so the live media topology is the source of truth.
++# For each DES, locate every "Intel IPUx CSI2 N" entity wired to one of its
++# source pads, the DES source pad number itself (which mirrors the CSI2Bus
++# LocalPort in the SSDT; a DES may declare two CSI2Bus resources), and the
++# absolute capture-node base (lowest "ISYS Capture <N>" index linked to that
++# CSI2). The DES->CSI2 links are IMMUTABLE so the live media topology is the
++# source of truth. Outputs are ordered by ascending DES source pad.
+ detect_gmsl_csi2() {
+     local topo
+     topo=$(media-ctl -p 2>/dev/null) || {
+         echo "ERROR: failed to read media topology via 'media-ctl -p'" >&2
+         return 1
+     }
+-    local d des_entity csi2 src_pad base line
++    local d o des_entity csi2 src_pad line lines key
+     for ((d = 0; d < NUM_DES; d++)); do
+         des_entity="${DES_PREFIX_NAME[$d]} ${DES_BA[$d]}"
+-        # Extract "<src_pad> <csi2_entity>" from the entity block.
+-        line=$(awk -v des="$des_entity" '
++        # Extract "<src_pad> <csi2_entity>" lines from the entity block.
++        lines=$(awk -v des="$des_entity" '
+             /^- entity / { in_des=0 }
+             index($0, "- entity") && index($0, ": " des " (") { in_des=1; next }
+             in_des && match($0, /pad[0-9]+:/) {
+@@ -673,37 +686,89 @@ detect_gmsl_csi2() {
+                 s = substr($0, RSTART+4, RLENGTH-5)
+                 gsub(/"/, "", s)
+                 print cur_pad, s
+-                exit
+-            }' <<<"$topo")
+-        if [ -z "$line" ]; then
++            }' <<<"$topo" | sort -n -k1,1 -u)
++        if [ -z "$lines" ]; then
+             echo "ERROR: DES${d}: could not find an 'Intel IPUx CSI2 N' link from '$des_entity'" >&2
+             return 1
+         fi
+-        src_pad=${line%% *}
+-        csi2=${line#* }
+-        DES_SRC_PAD[$d]=$src_pad
+-        IPU_CSI2_ENTITY[$d]=$csi2
+-        IPU_BASE[$d]=${csi2% CSI2 *}
+-
+-        CAPTURE_BASE[$d]=$(capture_base_of_csi2 "$csi2" <<<"$topo")
+-        if [ -z "${CAPTURE_BASE[$d]}" ]; then
+-            echo "ERROR: DES${d}: could not find any 'ISYS Capture' entity linked from '$csi2'" >&2
++        o=0
++        while read -r line; do
++            src_pad=${line%% *}
++            csi2=${line#* }
++            key="${d}_${o}"
++            OUT_SRC_PAD[$key]=$src_pad
++            OUT_CSI2[$key]=$csi2
++            OUT_IPU_BASE[$key]=${csi2% CSI2 *}
++            OUT_CAPBASE[$key]=$(capture_base_of_csi2 "$csi2" <<<"$topo")
++            if [ -z "${OUT_CAPBASE[$key]}" ]; then
++                echo "ERROR: DES${d}: could not find any 'ISYS Capture' entity linked from '$csi2'" >&2
++                return 1
++            fi
++            o=$(( o + 1 ))
++        done <<<"$lines"
++        DES_NOUT[$d]=$o
++        DES_SRC_PAD[$d]=${OUT_SRC_PAD[${d}_0]}
++        IPU_CSI2_ENTITY[$d]=${OUT_CSI2[${d}_0]}
++        IPU_BASE[$d]=${OUT_IPU_BASE[${d}_0]}
++        CAPTURE_BASE[$d]=${OUT_CAPBASE[${d}_0]}
++    done
++    build_link_out || return 1
++    return 0
++}
++
++# LINK_OUT["<d>_<l>"] = DES output index used by link l of DES d.
++declare -A LINK_OUT=()
++build_link_out() {
++    local d l o n m tok
++    for ((d = 0; d < NUM_DES; d++)); do
++        n=${DES_NOUT[$d]}
++        m=${DES_MAX_LINKS[$d]:-4}
++        for ((l = 0; l < m; l++)); do
++            LINK_OUT["${d}_${l}"]=$(( l * n / m ))
++        done
++    done
++    for tok in ${DES_LINK_OUT:-}; do
++        if ! [[ $tok =~ ^([0-9]+):([0-9]+):([0-9]+)$ ]]; then
++            echo "ERROR: DES_LINK_OUT: bad token '$tok' (expected D:L:O)" >&2
+             return 1
+         fi
++        d=${BASH_REMATCH[1]} l=${BASH_REMATCH[2]} o=${BASH_REMATCH[3]}
++        if (( d >= NUM_DES )) || (( l >= ${DES_MAX_LINKS[$d]:-4} )) ||
++            (( o >= DES_NOUT[$d] )); then
++            echo "ERROR: DES_LINK_OUT: '$tok' out of range" >&2
++            return 1
++        fi
++        LINK_OUT["${d}_${l}"]=$o
+     done
+     return 0
+ }
+ 
++# Output index / key of CFG entry $1 ("<d>_<o>").
++cfg_out() { echo "${LINK_OUT[${CFG_DES[$1]}_${CFG_LINKS[$1]}]:-0}"; }
++cfg_okey() { echo "${CFG_DES[$1]}_$(cfg_out "$1")"; }
++
+ # -------- pretty print --------------------------------------------------------
+ 
+ print_topology() {
+     echo "Discovered topology:"
+-    local d l p key ckey vid_node
++    local d l p o key okey ckey vid_node
+     for ((d = 0; d < NUM_DES; d++)); do
+ 	vid_node=$(( CAPTURE_BASE[$d] + VID_DEV_OFFSET ))
+         printf "  DES%d  %-34s %s %s -> %s (capture base /dev/video%s)\n" \
+             "$d" "${DES_PATH[$d]}" "${DES_PREFIX_NAME[$d]}" "${DES_BA[$d]}" \
+             "${IPU_CSI2_ENTITY[$d]}" "$vid_node"
++        if (( DES_NOUT[$d] > 1 )); then
++            for ((o = 0; o < DES_NOUT[$d]; o++)); do
++                okey="${d}_${o}"
++                printf "    OUT%d  DES pad %s -> %s (capture base /dev/video%s), links:" \
++                    "$o" "${OUT_SRC_PAD[$okey]}" "${OUT_CSI2[$okey]}" \
++                    "$(( OUT_CAPBASE[$okey] + VID_DEV_OFFSET ))"
++                for l in ${LINKS_OF[$d]}; do
++                    [ "${LINK_OUT[${d}_${l}]}" = "$o" ] && printf " %s" "$l"
++                done
++                echo
++            done
++        fi
+         for l in ${LINKS_OF[$d]}; do
+             key="${d}_${l}"
+             printf "    SER%d  %-34s %s %s\n" \
+@@ -763,6 +828,10 @@ print_topology() {
+ #     csi2_pad = STREAM_CAPTURE_BASE[s] +
+ #                 ((l + STREAM_LINK_ROTATION[s]) % CSI2_NODE_BANK_SIZE)
+ #     node     = CAPTURE_BASE[d] + csi2_pad
++# For a dual-output DES, CAPTURE_BASE and the CSI2 entity are those of the
++# DES output the link is assigned to (LINK_OUT / DES_LINK_OUT); every stream
++# of one link goes to the same output because max_des validates routing with
++# V4L2_SUBDEV_ROUTING_NO_SINK_STREAM_MIX.
+ # This places each stream in its configured capture bank and rotates selected
+ # streams across links using the permutation documented above. Streams that
+ # resolve to the same node cannot be enabled together and are rejected. For
+@@ -1329,10 +1398,11 @@ for k in "${!CFG_LINKS[@]}"; do
+     model=${CAM_MODEL[$(cfg_ckey "$k")]}
+     for s in ${MODEL_OPTIONAL_DEFAULT_STREAMS[$model]:-}; do
+         pad=$(stream_csi2_pad "$s" "$l")
++        okey=$(cfg_okey "$k")
+         n=0
+         free=1
+         for j in "${!CFG_LINKS[@]}"; do
+-            [ "${CFG_DES[$j]}" = "$d" ] || continue
++            [ "$(cfg_okey "$j")" = "$okey" ] || continue
+             for t in ${CFG_STREAMS[$j]}; do
+                 n=$(( n + 1 ))
+                 (( SER_NPHYS[${d}_${CFG_LINKS[$j]}] > 1 )) && continue
+@@ -1440,28 +1510,32 @@ for ((d = 0; d < NUM_DES; d++)); do
+ done
+ 
+ # Claim csi2_pad $3 and deserializer source_stream $4 for CFG entry $1 stream $2.
++# Both are tracked per DES output: each output has its own IPU CSI2 entity
++# (capture nodes) and its own DES PHY (VC ids are allocated per PHY by
++# max_des), so source_stream 0..3 restarts on every output.
+ claim_stream() {
+-    local k=$1 s=$2 pad=$3 ds=$4 d=${CFG_DES[$1]} where
++    local k=$1 s=$2 pad=$3 ds=$4 d=${CFG_DES[$1]} okey where
++    okey=$(cfg_okey "$k")
+     where="$(cfg_where "$k") stream ${s}"
+     if (( pad >= IPU_CSI2_SRC_PADS )); then
+         die "${where}: csi2_pad ${pad} exceeds CSI2 src-pad cap "\
+         "(${IPU_CSI2_SRC_PADS}); reduce active links/streams or rebuild the kernel with a "\
+         "higher *_NR_OF_CSI2_SRC_PADS"
+     fi
+-    if [ -n "${CSI2_PAD_OWNER[${d}_${pad}]:-}" ]; then
++    if [ -n "${CSI2_PAD_OWNER[${okey}_${pad}]:-}" ]; then
+         die "${where}: capture node offset ${pad} conflicts with "\
+-        "${CSI2_PAD_OWNER[${d}_${pad}]}"
++        "${CSI2_PAD_OWNER[${okey}_${pad}]}"
+     fi
+     if (( ds >= 4 )); then
+-        die "DES${d}: too many streams routed through deserializer source pad (maxim-serdes "\
+-        "supports 4 unique source_streams)"
++        die "DES${d}: too many streams routed through deserializer source pad "\
++        "${OUT_SRC_PAD[$okey]} (maxim-serdes supports 4 unique source_streams)"
+     fi
+-    if [ -n "${DES_STREAM_USED[${d}_${ds}]:-}" ]; then
++    if [ -n "${DES_STREAM_USED[${okey}_${ds}]:-}" ]; then
+         die "${where}: deserializer source_stream ${ds} conflicts with "\
+-        "${DES_STREAM_USED[${d}_${ds}]}"
++        "${DES_STREAM_USED[${okey}_${ds}]}"
+     fi
+-    CSI2_PAD_OWNER[${d}_${pad}]=$where
+-    DES_STREAM_USED[${d}_${ds}]=$where
++    CSI2_PAD_OWNER[${okey}_${pad}]=$where
++    DES_STREAM_USED[${okey}_${ds}]=$where
+     CSI2_PAD["${k}_${s}"]=$pad
+     DES_STREAM["${k}_${s}"]=$ds
+ }
+@@ -1486,8 +1560,9 @@ for k in "${!CFG_LINKS[@]}"; do
+     (( SER_NPHYS[${d}_${l}] > 1 )) && continue
+     for s in ${CFG_STREAMS[$k]}; do
+         pad=$(stream_csi2_pad "$s" "$l")
++        okey=$(cfg_okey "$k")
+         ds=0
+-        while [ -n "${DES_STREAM_USED[${d}_${ds}]:-}" ]; do ds=$(( ds + 1 )); done
++        while [ -n "${DES_STREAM_USED[${okey}_${ds}]:-}" ]; do ds=$(( ds + 1 )); done
+         claim_stream "$k" "$s" "$pad" "$ds"
+     done
+ done
+@@ -1506,7 +1581,7 @@ for k in "${!CFG_LINKS[@]}"; do
+     echo -e "  DES${d} ${label}\t Sensor model\t ${CAM_MODEL[$ckey]}"
+     for s in ${CFG_STREAMS[$k]}; do
+         csi2_pad=${CSI2_PAD["${k}_${s}"]}
+-        node=$(( CAPTURE_BASE[d] + csi2_pad ))
++        node=$(( OUT_CAPBASE[$(cfg_okey "$k")] + csi2_pad ))
+         vid_node=$(( node + VID_DEV_OFFSET ))
+         printf "                 Stream          %-8s %-10s %-12s %7s FPS -->  /dev/video%s\n" \
+             "[${s}]" "${CFG_STREAM_SIZE["${k}_${s}"]}" \
+@@ -1610,8 +1685,9 @@ for k in "${!CFG_LINKS[@]}"; do
+         SER_ROUTES[$key]+="${SER_ROUTES[$key]:+,}${SER_SINK_PAD}/${SER_SINK_SID}->${SER_SRC_PAD}/${SER_SRC_SID}[1]"
+         csi2_pad=${CSI2_PAD["${k}_${s}"]}
+         des_stream=${DES_STREAM["${k}_${s}"]}
+-        DES_ROUTES[$d]+="${DES_ROUTES[$d]:+,}${l}/${SER_SRC_SID}->${DES_SRC_PAD[$d]}/${des_stream}[1]"
+-        CSI2_ROUTES[$d]+="${CSI2_ROUTES[$d]:+,}0/${des_stream}->$((csi2_pad + 1))/0[1]"
++        okey=$(cfg_okey "$k")
++        DES_ROUTES[$d]+="${DES_ROUTES[$d]:+,}${l}/${SER_SRC_SID}->${OUT_SRC_PAD[$okey]}/${des_stream}[1]"
++        CSI2_ROUTES[$okey]+="${CSI2_ROUTES[$okey]:+,}0/${des_stream}->$((csi2_pad + 1))/0[1]"
+     done
+ done
+ 
+@@ -1620,20 +1696,26 @@ for key in "${!SER_ROUTES[@]}"; do
+     mc_R "\"${SER_PFX[$key]} ${SER_BA[$key]}\" [${SER_ROUTES[$key]}]"
+ done
+ 
+-# Apply per-DES route tables.
++# Apply per-DES route tables. A dual-output DES gets a single routing table
++# covering both source pads (max_des rejects set_routing while streaming),
++# then one table per IPU CSI2 entity.
+ for ((d = 0; d < NUM_DES; d++)); do
+     [ -n "${DES_ROUTES[$d]:-}" ] || continue
+     mc_R "\"${DES_PREFIX_NAME[$d]} ${DES_BA[$d]}\" [${DES_ROUTES[$d]}]"
+-    mc_R "\"${IPU_CSI2_ENTITY[$d]}\" [${CSI2_ROUTES[$d]}]"
++    for ((o = 0; o < DES_NOUT[$d]; o++)); do
++        okey="${d}_${o}"
++        [ -n "${CSI2_ROUTES[$okey]:-}" ] || continue
++        mc_R "\"${OUT_CSI2[$okey]}\" [${CSI2_ROUTES[$okey]}]"
++    done
+ done
+ 
+ # CSI2 source pad -> ISYS Capture entity link (must exist before formats flow).
+ for k in "${!CFG_LINKS[@]}"; do
+-    d=${CFG_DES[$k]}
++    okey=$(cfg_okey "$k")
+     for s in ${CFG_STREAMS[$k]}; do
+         csi2_pad=${CSI2_PAD["${k}_${s}"]}
+-        node=$(( CAPTURE_BASE[d] + csi2_pad ))
+-        mc_l "\"${IPU_CSI2_ENTITY[$d]}\":$((csi2_pad + 1)) -> \"${IPU_BASE[$d]} ISYS Capture ${node}\":0[1]"
++        node=$(( OUT_CAPBASE[$okey] + csi2_pad ))
++        mc_l "\"${OUT_CSI2[$okey]}\":$((csi2_pad + 1)) -> \"${OUT_IPU_BASE[$okey]} ISYS Capture ${node}\":0[1]"
+     done
+ done
+ 
+@@ -1686,18 +1768,19 @@ for k in "${!CFG_LINKS[@]}"; do
+         mc_v "\"${ser_pfx} ${ser}\":${SER_SINK_PAD}/${SER_SINK_SID} [fmt:${fmt}/${size} field:none]"
+         mc_v "\"${ser_pfx} ${ser}\":${SER_SRC_PAD}/${SER_SRC_SID} [fmt:${fmt}/${size} field:none]"
+         mc_v "\"${DES_PREFIX_NAME[$d]} ${DES_BA[$d]}\":${l}/${SER_SRC_SID} [fmt:${fmt}/${size} field:none]"
+-        mc_v "\"${DES_PREFIX_NAME[$d]} ${DES_BA[$d]}\":${DES_SRC_PAD[$d]}/${des_stream} [fmt:${fmt}/${size} field:none]"
+-        mc_v "\"${IPU_CSI2_ENTITY[$d]}\":0/${des_stream} [fmt:${fmt}/${size} field:none]"
+-        mc_v "\"${IPU_CSI2_ENTITY[$d]}\":$((csi2_pad + 1))/0 [fmt:${fmt}/${size} field:none]"
++        okey=$(cfg_okey "$k")
++        mc_v "\"${DES_PREFIX_NAME[$d]} ${DES_BA[$d]}\":${OUT_SRC_PAD[$okey]}/${des_stream} [fmt:${fmt}/${size} field:none]"
++        mc_v "\"${OUT_CSI2[$okey]}\":0/${des_stream} [fmt:${fmt}/${size} field:none]"
++        mc_v "\"${OUT_CSI2[$okey]}\":$((csi2_pad + 1))/0 [fmt:${fmt}/${size} field:none]"
+     done
+ done
+ 
+ # ---- v4l2-ctl: capture-node format -----------------------------------------
+ 
+ for k in "${!CFG_LINKS[@]}"; do
+-    d=${CFG_DES[$k]}
++    okey=$(cfg_okey "$k")
+     for s in ${CFG_STREAMS[$k]}; do
+-        node=$(( CAPTURE_BASE[d] + CSI2_PAD["${k}_${s}"] ))
++        node=$(( OUT_CAPBASE[$okey] + CSI2_PAD["${k}_${s}"] ))
+         vid_node=$(( node + VID_DEV_OFFSET ))
+         pixfmt=${CFG_STREAM_PIXFMT["${k}_${s}"]}
+         [ -z "$pixfmt" ] && continue
+@@ -1725,10 +1808,11 @@ for k in "${!CFG_LINKS[@]}"; do
+     else
+         suffix=$(echo "$l" | tr '0-3' 'a-d')
+     fi
++    okey=$(cfg_okey "$k")
+     for s in ${CFG_STREAMS[$k]}; do
+-        vid_node=$(( CAPTURE_BASE[d] + CSI2_PAD["${k}_${s}"] + VID_DEV_OFFSET ))
++        vid_node=$(( OUT_CAPBASE[$okey] + CSI2_PAD["${k}_${s}"] + VID_DEV_OFFSET ))
+         ln -snf "/dev/video${vid_node}" \
+-            "/dev/video-ar0234-${suffix}-${IPU_CSI2_ENTITY[$d]: -1}" ||
++            "/dev/video-ar0234-${suffix}-${OUT_CSI2[$okey]: -1}" ||
+             echo "WARN: cannot create /dev/video-ar0234-${suffix} link" >&2
+     done
+ done
+-- 
+2.43.0
+
