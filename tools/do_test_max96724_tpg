@@ -1,0 +1,371 @@
+#!/bin/bash
+#
+# MAX96724 test pattern generator (TPG) test for the maxim-serdes driver.
+# Streams the deserializer TPG through the IPU CSI2 port that is linked to the
+# deserializer, then checks the frame rate, frame errors and CSI-2 kernel errors.
+# The serializer, GMSL link and sensor are not used.
+
+set -eu
+
+usage() {
+    cat <<'EOF'
+Usage: do_test_max96724_tpg <i2c-bus> <i2c-addr> [options]
+
+Example: do_test_max96724_tpg 2 0x27 --mode 1080p60 --tool v4l2src --duration 60
+
+Arguments:
+  i2c-bus            I2C bus number of the MAX96724 (e.g. 2)
+  i2c-addr           I2C address of the MAX96724, hex (e.g. 0x27)
+
+Options:
+  --mode M           TPG mode: 1080p30 (default), 1080p60, 480p60
+  --pattern P        checker (default) or gradient
+  --tool T           yavta (default) or v4l2src (GStreamer)
+  --duration S       Run time in seconds (default 20)
+  --sink S           v4l2src sink: auto (default, screen) or fake (no display)
+  --save DIR         Save frames to DIR (yavta only, tpg-NNNNNN.bin)
+  --media DEV        Media device (default: auto-detect)
+  --phy-pad N        Deserializer source pad (default: first pad linked to IPU CSI2)
+  --capture NAME     Capture entity (default: first capture linked to CSI2 pad 1)
+  --dry              Print the commands without executing them
+  -h, --help         Show this help
+
+Notes:
+  - Requires the maxim-serdes driver (entity "max96724 <bus>-<addr>").
+  - Stop the sensor stream on this deserializer first. The TPG route replaces
+    the deserializer routes. The original routes, link and controls are restored
+    on exit.
+  - 1080p60: if the driver rejects the 1/60 frame interval, the script
+    starts the 1080p30 TPG and then sets the TPG pixel clock from 75 MHz to
+    150 MHz with register 0x0009 (PCLK_SRC 0x01 -> 0x02). The 1080p30 and
+    1080p60 TPG timings are the same except the pixel clock.
+EOF
+}
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+info() { echo "== $*"; }
+
+bus=""; addr=""
+mode="1080p30"; pattern="checker"; duration=20
+tool="yavta"; sink="auto"; save_dir=""; media=""; phy_pad=""; capture=""; dry_run=0
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -h|--help) usage; exit 0 ;;
+        --mode|--pattern|--duration|--tool|--sink|--save|--media|--phy-pad|--capture)
+            [ "$#" -ge 2 ] || die "Missing value for $1"
+            case "$1" in
+                --mode) mode="$2" ;;
+                --pattern) pattern="$2" ;;
+                --duration) duration="$2" ;;
+                --tool) tool="$2" ;;
+                --sink) sink="$2" ;;
+                --save) save_dir="$2" ;;
+                --media) media="$2" ;;
+                --phy-pad) phy_pad="$2" ;;
+                --capture) capture="$2" ;;
+            esac
+            shift 2 ;;
+        --dry) dry_run=1; shift ;;
+        -*) echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
+        *)
+            if [ -z "$bus" ]; then bus="$1"
+            elif [ -z "$addr" ]; then addr="$1"
+            else echo "Unexpected argument: $1" >&2; usage >&2; exit 1
+            fi
+            shift ;;
+    esac
+done
+
+[ -n "$bus" ] && [ -n "$addr" ] || { usage >&2; exit 1; }
+[[ "$bus" =~ ^[0-9]+$ ]] || die "Invalid i2c-bus: $bus"
+[[ "$addr" =~ ^(0x)?[0-9a-fA-F]{1,2}$ ]] || die "Invalid i2c-addr: $addr"
+addr_num=$((16#${addr#0x}))
+addr_hex=$(printf '0x%02x' "$addr_num")
+[[ "$duration" =~ ^[0-9]+$ ]] && [ "$duration" -gt 0 ] || die "Invalid duration: $duration"
+
+case "$mode" in
+    1080p30) width=1920; height=1080; fps=30 ;;
+    1080p60) width=1920; height=1080; fps=60 ;;
+    480p60)  width=640;  height=480;  fps=60 ;;
+    *) die "Unsupported mode: $mode (1080p30, 1080p60 or 480p60)" ;;
+esac
+
+case "$pattern" in
+    checker) pattern_idx=0 ;;
+    gradient) pattern_idx=1 ;;
+    *) die "Unsupported pattern: $pattern (checker or gradient)" ;;
+esac
+
+for t in media-ctl v4l2-ctl i2ctransfer; do
+    command -v "$t" >/dev/null || die "$t not found"
+done
+case "$tool" in yavta|v4l2src) ;; *) die "Unsupported tool: $tool (yavta or v4l2src)" ;; esac
+case "$sink" in auto|fake) ;; *) die "Unsupported sink: $sink (auto or fake)" ;; esac
+[ -z "$save_dir" ] || [ "$tool" = yavta ] || die "--save is supported with --tool yavta only"
+if [ "$tool" = v4l2src ]; then
+    command -v gst-launch-1.0 >/dev/null || die "gst-launch-1.0 not found"
+else
+    command -v yavta >/dev/null || die "yavta not found"
+fi
+
+SUDO=""
+[ "$(id -u)" -eq 0 ] || SUDO="sudo -E"
+
+# Print a command in copy-paste form
+show() {
+    local a out=""
+    for a in "$@"; do
+        if [[ "$a" =~ ^[A-Za-z0-9_./=,:@%+!-]+$ ]]; then
+            out+=" $a"
+        else
+            a=${a//\\/\\\\}; a=${a//\"/\\\"}; a=${a//\$/\\\$}; a=${a//\`/\\\`}
+            out+=" \"$a\""
+        fi
+    done
+    printf '+%s' "$out"
+}
+
+# Print a command. Execute it if not a dry run.
+run() {
+    show "$@"; printf '\n'
+    [ "$dry_run" -eq 1 ] || "$@"
+}
+
+i2c_rd() {
+    $SUDO i2ctransfer -f -y "$bus" "w2@$addr_hex" "$1" "$2" r1
+}
+
+# ---------------------------------------------------------------------------
+# Discover the media graph (read-only, also in dry run)
+# ---------------------------------------------------------------------------
+des="max96724 ${bus}-$(printf '%04x' "$addr_num")"
+
+if [ -z "$media" ]; then
+    for m in /dev/media*; do
+        [ -e "$m" ] || continue
+        if media-ctl -d "$m" -e "$des" >/dev/null 2>&1; then media="$m"; break; fi
+    done
+fi
+[ -n "$media" ] || die "Entity \"$des\" not found in any media device. Is the maxim-serdes driver loaded?"
+
+topo=$(media-ctl -d "$media" -p)
+
+# Print the block of one entity from the topology
+entity_block() {
+    printf '%s\n' "$topo" | awk -v n="$1" '
+        /^- entity [0-9]+: / {
+            name = $0; sub(/^- entity [0-9]+: /, "", name); sub(/ \([0-9]+ pads?.*$/, "", name)
+            p = (name == n); next
+        }
+        p'
+}
+
+# Print the active routes of an entity in media-ctl -R format
+active_routes() {
+    entity_block "$1" | awk '
+        /^\t\troutes:/ || /^\troutes:/ { r = 1; next }
+        /^\tpad[0-9]+:/ { r = 0 }
+        r && /\[ACTIVE/ { sub(/^[ \t]+/, ""); sub(/ \[.*$/, ""); s = s (s ? ", " : "") $0 " [1]" }
+        END { print s }'
+}
+
+des_block=$(entity_block "$des")
+des_sd=$(media-ctl -d "$media" -e "$des")
+npads=$(printf '%s\n' "$topo" | awk -v n="$des" '
+    /^- entity [0-9]+: / { name = $0; sub(/^- entity [0-9]+: /, "", name)
+        if (index(name, n " (") == 1) { sub(/^.*\(/, "", name); sub(/ pads?.*$/, "", name); print name } }')
+[ "$npads" = 9 ] || die "\"$des\" has $npads pads, expected 9 (4 links + 4 PHYs + TPG). Not maxim-serdes MAX96724?"
+tpg_pad=$((npads - 1))
+v4l2-ctl -d "$des_sd" -L 2>/dev/null | grep -q test_pattern || die "$des_sd has no test_pattern control"
+
+# Deserializer source pad and the IPU CSI2 entity linked to it
+read -r found_pad csi < <(printf '%s\n' "$des_block" | awk -v want="$phy_pad" '
+    /^\tpad[0-9]+:/ { pad = $1; sub(/^pad/, "", pad); sub(/:$/, "", pad) }
+    /-> "Intel IPU[0-9]* CSI2 [0-9]+":0 \[ENABLED/ {
+        if (want != "" && pad != want) next
+        n = $0; sub(/^[^"]*"/, "", n); sub(/".*$/, "", n); print pad, n; exit
+    }' | awk '{ pad = $1; $1 = ""; sub(/^ /, ""); print pad, $0 }')
+[ -n "${found_pad:-}" ] || die "No enabled link from \"$des\"${phy_pad:+ pad $phy_pad} to an IPU CSI2 entity"
+phy_pad="$found_pad"
+
+# Capture entity linked to CSI2 pad 1
+csi_block=$(entity_block "$csi")
+if [ -z "$capture" ]; then
+    capture=$(printf '%s\n' "$csi_block" | awk '
+        /^\tpad[0-9]+:/ { p = ($1 == "pad1:") }
+        p && /-> ".*Capture [0-9]+":0/ { n = $0; sub(/^[^"]*"/, "", n); sub(/".*$/, "", n); print n; exit }')
+fi
+[ -n "$capture" ] || die "No capture entity linked to \"$csi\":1"
+cap_link_state=$(printf '%s\n' "$csi_block" | awk -v c="$capture" '
+    /^\tpad[0-9]+:/ { p = ($1 == "pad1:") }
+    p && index($0, "-> \"" c "\":0") { print (index($0, "ENABLED") ? 1 : 0); exit }')
+[ -n "$cap_link_state" ] || die "\"$capture\" is not linked to \"$csi\":1"
+vid=$(media-ctl -d "$media" -e "$capture")
+
+orig_des_routes=$(active_routes "$des")
+orig_csi_routes=$(active_routes "$csi")
+orig_pattern=$(v4l2-ctl -d "$des_sd" -C test_pattern 2>/dev/null | awk '{ print $2 }')
+
+info "Media device : $media"
+info "Deserializer : \"$des\" ($des_sd), TPG pad $tpg_pad, source pad $phy_pad"
+info "IPU CSI2     : \"$csi\""
+info "Capture      : \"$capture\" ($vid)"
+info "Test         : ${width}x${height}@${fps} RGB888, pattern $pattern, ${duration}s, $tool$([ "$tool" = v4l2src ] && echo " ($sink sink)")"
+info "Saved state  : des routes [${orig_des_routes}], csi routes [${orig_csi_routes}], capture link $cap_link_state, test_pattern ${orig_pattern:-?}"
+
+# ---------------------------------------------------------------------------
+# Restore on exit
+# ---------------------------------------------------------------------------
+changed=0
+orig_pclk=""
+cap_pid=""
+
+restore() {
+    [ "$dry_run" -eq 0 ] && [ "$changed" -eq 1 ] || return 0
+    info "Restore"
+    [ -n "$cap_pid" ] && kill "$cap_pid" 2>/dev/null && wait "$cap_pid" 2>/dev/null
+    if [ -n "$orig_pclk" ]; then
+        $SUDO i2ctransfer -f -y "$bus" "w3@$addr_hex" 0x00 0x09 "$orig_pclk" || true
+    fi
+    [ -n "$orig_pattern" ] && v4l2-ctl -d "$des_sd" -c "test_pattern=$orig_pattern" || true
+    [ "$cap_link_state" = 1 ] || media-ctl -d "$media" -l "'$csi':1 -> '$capture':0 [0]" || true
+    [ -n "$orig_csi_routes" ] && media-ctl -d "$media" -R "'$csi' [$orig_csi_routes]" || true
+    [ -n "$orig_des_routes" ] && media-ctl -d "$media" -R "'$des' [$orig_des_routes]" || true
+}
+trap restore EXIT
+trap 'exit 130' INT TERM
+
+# ---------------------------------------------------------------------------
+# Configure the pipeline
+# ---------------------------------------------------------------------------
+info "Configure pipeline"
+[ "$dry_run" -eq 1 ] || orig_pclk=$(i2c_rd 0x00 0x09)
+changed=1
+if ! run media-ctl -d "$media" -R "'$des' [$tpg_pad/0 -> $phy_pad/0 [1]]"; then
+    die "Cannot set TPG route. Stop the sensor stream on \"$des\" first (EBUSY while streaming)."
+fi
+
+clk_switch=0
+fmt="fmt:RGB888_1X24/${width}x${height} field:none"
+if [ "$width" = 1920 ] && [ "$fps" = 60 ]; then
+    if [ "$dry_run" -eq 0 ] &&
+       media-ctl -d "$media" -V "'$des':$tpg_pad/0 [fmt:RGB888_1X24/${width}x${height}@1/60 field:none]" 2>/dev/null; then
+        echo "+ (driver accepted interval 1/60)"
+    else
+        echo "# Driver rejects interval 1/60: use 1080p30 TPG and switch TPG pixel clock to 150 MHz after stream on"
+        clk_switch=1
+        run media-ctl -d "$media" -V "'$des':$tpg_pad/0 [$fmt]"
+    fi
+else
+    run media-ctl -d "$media" -V "'$des':$tpg_pad/0 [$fmt]"
+fi
+run v4l2-ctl -d "$des_sd" -c "test_pattern=$pattern_idx"
+run media-ctl -d "$media" -R "'$csi' [0/0 -> 1/0 [1]]"
+run media-ctl -d "$media" -V "'$csi':0/0 [$fmt]"
+run media-ctl -d "$media" -l "'$csi':1 -> '$capture':0 [1]"
+run v4l2-ctl -d "$vid" --set-fmt-video="width=$width,height=$height,pixelformat=BGR3"
+if [ "$dry_run" -eq 0 ]; then
+    v4l2-ctl -d "$des_sd" --get-subdev-fps "pad=$tpg_pad,stream=0" 2>/dev/null | grep -i "frames per second" || true
+fi
+
+# ---------------------------------------------------------------------------
+# Stream
+# ---------------------------------------------------------------------------
+if [ "$dry_run" -eq 1 ]; then
+    log=/tmp/do_test_max96724_tpg.log
+else
+    log=$(mktemp /tmp/do_test_max96724_tpg.XXXXXX.log)
+fi
+dmesg_start=0
+[ "$dry_run" -eq 1 ] || dmesg_start=$($SUDO dmesg | wc -l)
+
+if [ "$tool" = v4l2src ]; then
+    if [ "$sink" = auto ] && [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
+        echo "WARNING: DISPLAY/WAYLAND_DISPLAY not set; use --sink fake" >&2
+        sink=fake
+    fi
+    if [ "$sink" = auto ]; then
+        gst_sink=(videoconvert ! fpsdisplaysink video-sink=autovideosink text-overlay=true)
+    else
+        gst_sink=(fpsdisplaysink video-sink=fakesink text-overlay=false)
+    fi
+    cap_cmd=(timeout "$duration" gst-launch-1.0 -v v4l2src "device=$vid"
+             ! "video/x-raw,format=BGR,width=$width,height=$height"
+             ! "${gst_sink[@]}" sync=false fps-update-interval=2000)
+else
+    nframes=$((fps * duration))
+    cap_cmd=(timeout $((duration + 10)) yavta "-c$nframes" -n4 -f BGR24 -s "${width}x${height}")
+    if [ -n "$save_dir" ]; then
+        run mkdir -p "$save_dir"
+        cap_cmd+=("-F$save_dir/tpg-#.bin")
+    fi
+    cap_cmd+=("$vid")
+fi
+
+info "Stream (log: $log)"
+show "${cap_cmd[@]}"; printf ' > %s 2>&1 &\n' "$log"
+if [ "$dry_run" -eq 0 ]; then
+    "${cap_cmd[@]}" > "$log" 2>&1 &
+    cap_pid=$!
+fi
+
+if [ "$clk_switch" -eq 1 ]; then
+    echo "+ sleep 2"
+    if [ "$dry_run" -eq 0 ]; then
+        sleep 2
+        kill -0 "$cap_pid" 2>/dev/null || die "Capture stopped early. See $log"
+        cur_pclk=$(i2c_rd 0x00 0x09)
+        new_pclk=$(printf '0x%02x' $(( (cur_pclk & 0xfc) | 0x02 )))
+        vprbs=$(i2c_rd 0x01 0xdc)
+        new_vprbs=$(printf '0x%02x' $(( vprbs & 0x7f )))
+    else
+        new_pclk="0x02"; new_vprbs="<0x01dc & 0x7f>"
+    fi
+    # VPRBS(0) 0x01dc bit7 = 0: PATGEN clock 150 MHz; DEBUG_EXTRA 0x0009[1:0] = 0b10: PCLK from pipe
+    run $SUDO i2ctransfer -f -y "$bus" "w3@$addr_hex" 0x01 0xdc "$new_vprbs"
+    run $SUDO i2ctransfer -f -y "$bus" "w3@$addr_hex" 0x00 0x09 "$new_pclk"
+    [ "$dry_run" -eq 1 ] || echo "   0x0009: $cur_pclk -> $(i2c_rd 0x00 0x09), 0x01dc: $vprbs -> $(i2c_rd 0x01 0xdc)"
+fi
+
+[ "$dry_run" -eq 1 ] && exit 0
+
+wait "$cap_pid" || true
+cap_pid=""
+
+# ---------------------------------------------------------------------------
+# Results
+# ---------------------------------------------------------------------------
+info "Result"
+fail=0
+if [ "$tool" = v4l2src ]; then
+    grep -o "rendered: [0-9]*, dropped: [0-9]*, current: [0-9.]*, average: [0-9.]*" "$log" | tail -3 || true
+    grep -iE "ERROR|WARNING" "$log" | head -5 || true
+    grep -q "rendered:" "$log" || { echo "No frames rendered"; fail=1; }
+else
+    frames=$(grep -c " fps ts " "$log" || true)
+    err_frames=$(grep " fps ts " "$log" | grep -c "\[E\]" || true)
+    last_fps=$(grep " fps ts " "$log" | tail -20 | awk '{ for (i = 1; i < NF; i++) if ($(i + 1) == "fps") { s += $i; n++ } } END { if (n) printf "%.2f", s / n }')
+    echo "Frames captured   : $frames"
+    echo "Frames with [E]   : $err_frames"
+    echo "Last 20 frames fps: ${last_fps:-n/a} (expected ~$fps)"
+    grep "^Captured" "$log" || true
+    [ "$frames" -gt 0 ] || fail=1
+    [ "$err_frames" -eq 0 ] || fail=1
+fi
+
+csi_errors=$($SUDO dmesg | tail -n +$((dmesg_start + 1)) | grep -iE "csi2?-[0-9]+ error|csi.*error" || true)
+if [ -n "$csi_errors" ]; then
+    echo "Kernel CSI errors :"
+    printf '%s\n' "$csi_errors" | head -20
+    fail=1
+else
+    echo "Kernel CSI errors : none"
+fi
+
+if [ "$fail" -eq 0 ]; then
+    info "PASS: MAX96724 -> IPU CSI2 D-PHY link is clean with TPG ${width}x${height}@${fps}"
+else
+    info "FAIL: see $log and dmesg"
+fi
+exit "$fail"
