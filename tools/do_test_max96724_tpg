@@ -39,6 +39,9 @@ Notes:
     starts the 1080p30 TPG and then sets the TPG pixel clock from 75 MHz to
     150 MHz with register 0x0009 (PCLK_SRC 0x01 -> 0x02). The 1080p30 and
     1080p60 TPG timings are the same except the pixel clock.
+  - If the internal GMSL frame sync generator is on (FSYNC_0 0x04a0 MODE
+    [3:2] != 0b11, e.g. ACPI "gmsl-frame-sync-internal-hz"), no video pipe
+    outputs the TPG. The script turns it off during the test and restores it.
 EOF
 }
 
@@ -219,6 +222,7 @@ info "Saved state  : des routes [${orig_des_routes}], csi routes [${orig_csi_rou
 # ---------------------------------------------------------------------------
 changed=0
 orig_pclk=""
+orig_fsync=""
 cap_pid=""
 
 restore() {
@@ -227,6 +231,9 @@ restore() {
     [ -n "$cap_pid" ] && kill "$cap_pid" 2>/dev/null && wait "$cap_pid" 2>/dev/null
     if [ -n "$orig_pclk" ]; then
         $SUDO i2ctransfer -f -y "$bus" "w3@$addr_hex" 0x00 0x09 "$orig_pclk" || true
+    fi
+    if [ -n "$orig_fsync" ]; then
+        $SUDO i2ctransfer -f -y "$bus" "w3@$addr_hex" 0x04 0xa0 "$orig_fsync" || true
     fi
     [ -n "$orig_pattern" ] && v4l2-ctl -d "$des_sd" -c "test_pattern=$orig_pattern" || true
     [ "$cap_link_state" = 1 ] || media-ctl -d "$media" -l "'$csi':1 -> '$capture':0 [0]" || true
@@ -242,6 +249,18 @@ trap 'exit 130' INT TERM
 info "Configure pipeline"
 [ "$dry_run" -eq 1 ] || orig_pclk=$(i2c_rd 0x00 0x09)
 changed=1
+# FSYNC_0 0x04a0 MODE[3:2] = 0b11: frame sync generator off. When it runs, the
+# video pipes output nothing, so the TPG never reaches the CSI-2 controller.
+if [ "$dry_run" -eq 0 ]; then
+    fsync=$(i2c_rd 0x04 0xa0)
+    if (( (fsync & 0x0c) != 0x0c )); then
+        orig_fsync=$fsync
+        echo "# Internal frame sync generator is on (0x04a0=$fsync): turn it off for the TPG"
+        run $SUDO i2ctransfer -f -y "$bus" "w3@$addr_hex" 0x04 0xa0 "$(printf '0x%02x' $(( fsync | 0x0c )))"
+    fi
+else
+    echo "# If 0x04a0 MODE[3:2] != 0b11 (frame sync generator on), set it to 0b11"
+fi
 if ! run media-ctl -d "$media" -R "'$des' [$tpg_pad/0 -> $phy_pad/0 [1]]"; then
     die "Cannot set TPG route. Stop the sensor stream on \"$des\" first (EBUSY while streaming)."
 fi
@@ -364,7 +383,7 @@ else
 fi
 
 if [ "$fail" -eq 0 ]; then
-    info "PASS: MAX96724 -> IPU CSI2 D-PHY link is clean with TPG ${width}x${height}@${fps}"
+    info "PASS: MAX96724 -> IPU CSI2 link is clean with TPG ${width}x${height}@${fps}"
 else
     info "FAIL: see $log and dmesg"
 fi
